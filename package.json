@@ -1,0 +1,21 @@
+{
+  "name": "crown-and-fealty",
+  "private": true,
+  "version": "0.2.0",
+  "type": "module",
+  "description": "Digital playtest scaffold for the medieval-politics board game Crown & Fealty",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "boardgame.io": "^0.50.2",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.1",
+    "vite": "^5.4.0"
+  }
+}

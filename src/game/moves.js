@@ -312,7 +312,15 @@ export const harvestMoves = {
     if (!isKing(G, playerID)) return INVALID_MOVE;
     runHarvest(G);
     G.year += 1;
-    G.log.push(`--- Year ${G.year} ---`);
+    if (G.year > CONFIG.years) {
+      // Land + Heir bonuses must be applied here (a move, where mutating G
+      // is legal) rather than in game.js's endIf, which boardgame.io treats
+      // as a pure/read-only check and freezes G against mutation.
+      G.finalScores = finalScores(G);
+      G.log.push('Game over.');
+    } else {
+      G.log.push(`--- Year ${G.year} ---`);
+    }
     events.endPhase(); // wraps to 'council' via phase.next
   },
 };

@@ -5,7 +5,6 @@
 import { ActivePlayers } from 'boardgame.io/core';
 import { CONFIG } from '../config.js';
 import { setup } from './setup.js';
-import { finalScores } from './scoring.js';
 import {
   councilMoves,
   draftMoves,
@@ -52,15 +51,15 @@ export const CrownAndFealty = {
   },
 
   // Fixed horizon (§2): game ends once we roll past the final year.
+  // G.finalScores is computed in moves.js's endHarvest (a move, where
+  // mutating G is legal) — endIf must stay a pure read, never mutate G.
   endIf: ({ G }) => {
     if (G.year > CONFIG.years) {
-      const scores = finalScores(G);
-      // Winner = highest prestige.
       let winner = null;
-      for (const seat of Object.keys(scores)) {
-        if (winner === null || scores[seat] > scores[winner]) winner = seat;
+      for (const seat of Object.keys(G.finalScores)) {
+        if (winner === null || G.finalScores[seat] > G.finalScores[winner]) winner = seat;
       }
-      return { scores, winner };
+      return { scores: G.finalScores, winner };
     }
   },
 

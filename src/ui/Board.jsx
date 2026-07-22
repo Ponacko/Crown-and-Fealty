@@ -15,10 +15,19 @@ const cardName = (uid) => {
   return c ? c.name : uid;
 };
 
+// §5: a seat is active either as the sole ctx.currentPlayer (Council,
+// Harvest, and each sequential Actions turn), or, when a phase sets
+// activePlayers (Draft, War & Rebellion), by appearing in ctx.activePlayers.
+function isActiveSeat(ctx, seat) {
+  if (ctx.activePlayers) return seat in ctx.activePlayers;
+  return ctx.currentPlayer === seat;
+}
+
 export function Board({ G, ctx, moves, playerID }) {
   const me = playerID ?? G.crownHolder;
   const isKing = me === G.crownHolder;
   const phase = ctx.phase;
+  const active = isActiveSeat(ctx, me);
 
   if (ctx.gameover) {
     return (
@@ -36,6 +45,7 @@ export function Board({ G, ctx, moves, playerID }) {
       <div style={{ ...box, minWidth: 260 }}>
         <b>Year {G.year} / {CONFIG.years}</b> — phase: <b>{phase}</b>
         <div>Acting as seat: <b>{me}</b> {isKing ? '(KING 👑)' : '(duke)'}</div>
+        <div>Active now: <b>{ctx.activePlayers ? Object.keys(ctx.activePlayers).join(', ') : ctx.currentPlayer}</b></div>
         <div>Crown holder: seat {G.crownHolder}</div>
         <div>Tax law: {G.taxLaw} | Levy law: {G.levyLaw}</div>
         <div>Offices: {JSON.stringify(G.offices)}</div>
@@ -70,7 +80,9 @@ export function Board({ G, ctx, moves, playerID }) {
       {/* --- Controls for the current phase --- */}
       <div style={{ ...box, minWidth: 320 }}>
         <b>Actions ({phase})</b>
-        <PhaseControls phase={phase} moves={moves} G={G} me={me} isKing={isKing} />
+        {active
+          ? <PhaseControls phase={phase} moves={moves} G={G} me={me} isKing={isKing} />
+          : <div>Waiting for seat {ctx.currentPlayer} — it isn't seat {me}'s turn.</div>}
       </div>
 
       {/* --- Log --- */}
@@ -91,33 +103,32 @@ function PhaseControls({ phase, moves, G, me, isKing }) {
 
   switch (phase) {
     case 'council':
+      // Only the crown-holder is ever active here (game.js turn order), so
+      // reaching this branch already implies isKing.
       return (
         <div>
-          {isKing && <>
-            <div>Tax law:
-              {['low', 'medium', 'high'].map((v) =>
-                <button key={v} style={btn} onClick={() => moves.setLaw('taxLaw', v)}>{v}</button>)}
-            </div>
-            <div>Levy law:
-              {['low', 'medium', 'high'].map((v) =>
-                <button key={v} style={btn} onClick={() => moves.setLaw('levyLaw', v)}>{v}</button>)}
-            </div>
-            <div>Declare war:
-              {G.foreignKingdoms.filter((k) => !k.conquered).map((k) =>
-                <button key={k.id} style={btn} onClick={() => moves.declareWar(k.id)}>
-                  {k.name} (g{k.garrison})
-                </button>)}
-            </div>
-            <div>Grant office (to a duke seat):
-              {CONFIG.grantableOffices.map((o) =>
-                Object.keys(G.favor).map((d) =>
-                  <button key={o + d} style={btn} onClick={() => moves.grantOffice(o, d)}>
-                    {o}→{d}
-                  </button>))}
-            </div>
-            <button style={btn} onClick={() => moves.endCouncil()}>END COUNCIL ▶</button>
-          </>}
-          {!isKing && <div>Waiting on the king. (Bribes/deals happen at the table.)</div>}
+          <div>Tax law:
+            {['low', 'medium', 'high'].map((v) =>
+              <button key={v} style={btn} onClick={() => moves.setLaw('taxLaw', v)}>{v}</button>)}
+          </div>
+          <div>Levy law:
+            {['low', 'medium', 'high'].map((v) =>
+              <button key={v} style={btn} onClick={() => moves.setLaw('levyLaw', v)}>{v}</button>)}
+          </div>
+          <div>Declare war:
+            {G.foreignKingdoms.filter((k) => !k.conquered).map((k) =>
+              <button key={k.id} style={btn} onClick={() => moves.declareWar(k.id)}>
+                {k.name} (g{k.garrison})
+              </button>)}
+          </div>
+          <div>Grant office (to a duke seat):
+            {CONFIG.grantableOffices.map((o) =>
+              Object.keys(G.favor).map((d) =>
+                <button key={o + d} style={btn} onClick={() => moves.grantOffice(o, d)}>
+                  {o}→{d}
+                </button>))}
+          </div>
+          <button style={btn} onClick={() => moves.endCouncil()}>END COUNCIL ▶</button>
         </div>
       );
 
@@ -133,6 +144,7 @@ function PhaseControls({ phase, moves, G, me, isKing }) {
       const mine = G.players[me];
       return (
         <div>
+          <div>Actions left: <b>{mine.actionsLeft}</b></div>
           <div>{num}
             <button style={btn} onClick={() => moves.muster(n)}>Muster</button>
           </div>
@@ -157,7 +169,7 @@ function PhaseControls({ phase, moves, G, me, isKing }) {
                 Play {cardName(h.uid)}
               </button>)}
           </div>
-          {isKing && <button style={btn} onClick={() => moves.endActions()}>END ACTIONS ▶</button>}
+          <button style={btn} onClick={() => moves.pass()}>PASS (end turn) ▶</button>
         </div>
       );
     }
@@ -178,10 +190,11 @@ function PhaseControls({ phase, moves, G, me, isKing }) {
       );
 
     case 'harvest':
+      // Only the crown-holder is ever active here (game.js turn order).
       return (
         <div>
           <div>Harvest scores income, crown rent, and office prestige on advance.</div>
-          {isKing && <button style={btn} onClick={() => moves.endHarvest()}>HARVEST &amp; NEXT YEAR ▶</button>}
+          <button style={btn} onClick={() => moves.endHarvest()}>HARVEST &amp; NEXT YEAR ▶</button>
         </div>
       );
 

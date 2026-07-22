@@ -86,16 +86,16 @@ export const draftMoves = {
 
   endDraft({ G, playerID, events }) {
     if (!isKing(G, playerID)) return INVALID_MOVE;
-    // seed action budgets for next phase
-    for (const seat of Object.keys(G.players)) {
-      G.players[seat].actionsLeft = CONFIG.actionsPerTurn;
-    }
+    // Actions-phase turn order seeds each seat's actionsLeft as their turn
+    // begins (see game.js) — nothing to prep here.
     events.endPhase();
   },
 };
 
 // ---------------------------------------------------------------------------
-// PHASE 3 — ACTIONS (each player spends actionsLeft; king advances phase)
+// PHASE 3 — ACTIONS (§5 Phase 3: sequential turns, clockwise from the king;
+// each seat's actionsLeft is seeded by turn.onBegin and the phase auto-
+// advances once everyone has had their turn — see game.js)
 // ---------------------------------------------------------------------------
 export const actionMoves = {
   muster({ G, playerID }, count) {
@@ -180,9 +180,13 @@ export const actionMoves = {
     G.log.push(`Seat ${playerID} plays ${def.name}.`);
   },
 
-  endActions({ G, playerID, events }) {
-    if (!isKing(G, playerID)) return INVALID_MOVE;
-    events.endPhase();
+  // Voluntarily end a turn early, forfeiting any unspent actions (§5:
+  // "passing ends the turn"; holding actions as reactions is a later
+  // milestone). turn.endIf (game.js) ends the turn once actionsLeft <= 0,
+  // and automatically advances the phase once everyone has gone once.
+  pass({ G, playerID }) {
+    G.players[playerID].actionsLeft = 0;
+    G.log.push(`Seat ${playerID} passes.`);
   },
 };
 

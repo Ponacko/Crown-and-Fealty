@@ -1,9 +1,11 @@
 // ==========================================================================
-// M0 safety net: drives the REAL boardgame.io Game object (phases, turn
+// M0/M1 safety net: drives the REAL boardgame.io Game object (phases, turn
 // order, moves) through a full 6-year match headlessly, the same code path
 // the debug panel exercises, and asserts the match reaches "Game over" with
-// a winner. Uses boardgame.io's own reducer directly (no React/transport)
-// so it stays fast and dependency-free.
+// a winner. Also asserts M1's turn gating: a duke can't run council business,
+// and only the current seat can act during its Actions turn. Uses
+// boardgame.io's own reducer directly (no React/transport) so it stays fast
+// and dependency-free.
 // ==========================================================================
 import { createRequire } from 'node:module';
 import { CrownAndFealty } from '../src/game/game.js';
@@ -86,8 +88,15 @@ for (let y = 1; y <= CONFIG.years; y++) {
   move(KING, 'endDraft');
 
   assertPhase('actions');
-  move(KING, 'endActions');
-
+  // §5 Phase 3: sequential turns clockwise from the king. Each turn, the
+  // seat whose turn it ISN'T must be rejected (M1's core guarantee), then
+  // the active seat passes; the phase auto-advances once everyone has gone.
+  for (let i = 0; i < SEATS.length; i++) {
+    const current = state.ctx.currentPlayer;
+    const bystander = SEATS.find((s) => s !== current);
+    expectRejected(bystander, 'pass');
+    move(current, 'pass');
+  }
   assertPhase('warAndRebellion');
   move(KING, 'endWarPhase');
 

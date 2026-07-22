@@ -13,6 +13,21 @@ import {
   harvestMoves,
 } from './moves.js';
 
+const crownHolderPos = (G, ctx) => ctx.playOrder.indexOf(G.crownHolder);
+
+// §5: the crown-holder is always the sole actor in Council and Harvest, and
+// always leads off the Actions phase. A phase's `turn` config completely
+// replaces the game-level default (no key-by-key merge), so anywhere we set
+// `turn.order` we own the whole turn config for that phase. boardgame.io
+// mutates each phase's `turn` object in place, so hand each phase its own
+// (a factory, not a shared literal).
+const crownHolderOnly = () => ({
+  order: {
+    first: ({ G, ctx }) => crownHolderPos(G, ctx),
+    next: () => undefined, // a single turn; the phase always ends via its own end move
+  },
+});
+
 export const CrownAndFealty = {
   name: 'crown-and-fealty',
 
@@ -21,31 +36,61 @@ export const CrownAndFealty = {
 
   setup,
 
-  // Hotseat/debug: everyone is always active, so any seat can act at any time
-  // and you drive the flow from the debug panel. Role gating is done inside
-  // moves (king-only checks). Swap to stages/turn order for strict play later.
+  // Default for phases that don't override it below (draft, warAndRebellion):
+  // every seat is active at once, in any order, until the phase ends.
   turn: { activePlayers: ActivePlayers.ALL },
 
   phases: {
     council: {
+      // §5 Council: only the crown-holder may act; other seats cannot.
       start: true,
       next: 'draft',
+      turn: crownHolderOnly(),
       moves: councilMoves,
     },
     draft: {
+      // §5 Phase 2: all players active simultaneously for the pick step
+      // (the real Inis-style pick-and-pass lands in M2a; for now everyone
+      // just drafts up to a full hand under the inherited ActivePlayers.ALL).
       next: 'actions',
       moves: draftMoves,
     },
     actions: {
+      // §5 Phase 3: sequential turns clockwise starting from the king. Each
+      // player's turn begins with a full action budget and ends as soon as
+      // it's spent (or the player passes early); the phase itself ends once
+      // everyone has gone exactly once.
       next: 'warAndRebellion',
+      turn: {
+        order: {
+          first: ({ G, ctx }) => crownHolderPos(G, ctx),
+          next: ({ G, ctx }) => {
+            const stepsTaken =
+              (ctx.playOrderPos - crownHolderPos(G, ctx) + ctx.playOrder.length) %
+              ctx.playOrder.length;
+            if (stepsTaken < ctx.playOrder.length - 1) {
+              return (ctx.playOrderPos + 1) % ctx.playOrder.length;
+            }
+            return undefined; // everyone has had a turn — end the phase
+          },
+        },
+        onBegin: ({ G, ctx }) => {
+          G.players[ctx.currentPlayer].actionsLeft = CONFIG.actionsPerTurn;
+        },
+        endIf: ({ G, ctx }) => G.players[ctx.currentPlayer].actionsLeft <= 0,
+      },
       moves: actionMoves,
     },
     warAndRebellion: {
+      // §5 Phase 4: who's active when is finished in M3/M4. For now, inherit
+      // ActivePlayers.ALL so commitTroops/declareRebellion/etc. keep working.
       next: 'harvest',
       moves: warMoves,
     },
     harvest: {
+      // Automatic; only the crown-holder advances (endHarvest).
       next: 'council',
+      turn: crownHolderOnly(),
       moves: harvestMoves,
     },
   },

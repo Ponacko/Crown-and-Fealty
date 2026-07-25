@@ -78,14 +78,27 @@ for (let y = 1; y <= CONFIG.years; y++) {
   expectRejected(DUKES[0], 'endCouncil');
   move(KING, 'endCouncil');
 
-  assertPhase('draft');
-  for (const seat of SEATS) {
-    // May legitimately be rejected once a seat's hand is already full in
-    // later years (nobody plays cards in this smoke test) — that's fine,
-    // we're exercising phase flow, not the draft/card systems.
-    dispatchMove(seat, 'drawHand', []);
+  // §9 Phase 2 (Inis-style pick-and-pass): every seat picks once per round;
+  // the phase ends itself once the final round's leftovers are discarded
+  // (moves.js settleDraftRound). The shared 48-card starter deck (expanding
+  // it is M2b's job) is exhausted by year 4 in a 4-seat game and nothing
+  // reshuffles the discard pile back in (out of scope for M2a), so once it's
+  // dry, dealDraftPacks resolves an all-empty draft immediately in onBegin
+  // and the phase skips straight to 'actions' — that's correct, not a bug.
+  if (state.ctx.phase === 'draft') {
+    while (state.G.draftPacks) {
+      for (const seat of SEATS) {
+        // A thin/exhausted deck can cascade several rounds — and the whole
+        // draft to completion — within a single pick (settleDraftRound), so
+        // re-check after every move rather than assuming one pass == one round.
+        if (!state.G.draftPacks) break;
+        const pack = state.G.draftPacks[seat];
+        if (pack && pack.length > 0) move(seat, 'pickCard', pack[0].uid);
+      }
+    }
+  } else {
+    console.log(`  (deck exhausted — Year ${y}'s draft resolved empty and was skipped)`);
   }
-  move(KING, 'endDraft');
 
   assertPhase('actions');
   // §5 Phase 3: sequential turns clockwise from the king. Each turn, the
@@ -95,6 +108,11 @@ for (let y = 1; y <= CONFIG.years; y++) {
     const current = state.ctx.currentPlayer;
     const bystander = SEATS.find((s) => s !== current);
     expectRejected(bystander, 'pass');
+    // Play a card if we're holding one — a real player spends their hand
+    // instead of hoarding it forever, which also keeps cards cycling back
+    // through the discard pile for the draft's reshuffle-on-empty to reuse.
+    const hand = state.G.players[current].hand;
+    if (hand.length > 0) dispatchMove(current, 'playCard', [hand[0].uid]);
     move(current, 'pass');
   }
   assertPhase('warAndRebellion');

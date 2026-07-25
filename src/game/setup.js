@@ -7,7 +7,7 @@
 import { CONFIG, KING_SEAT } from '../config.js';
 import { PROVINCES, DUCHY_ORDER, FOREIGN_KINGDOMS, CARDS } from './data.js';
 
-export function setup({ ctx }) {
+export function setup({ ctx, random }) {
   const n = ctx.numPlayers;
   const dukes = ctx.playOrder.filter((p) => p !== KING_SEAT);
 
@@ -75,18 +75,25 @@ export function setup({ ctx }) {
     casusBelli: {},        // {dukeSeat: count}
     rebellionThisYear: false,
     warLostThisYear: false,
-    deck: shuffleStarter(),
+    deck: random.Shuffle(buildStarterDeck()),
     discard: [],
+    // §9 Phase 2 (Inis-style pick-and-pass): populated by the Draft phase's
+    // onBegin hook (game.js) each year; draftPacks is null outside a draft.
+    draftPacks: null,
+    draftRound: 0,
+    draftPicksThisRound: {},
     log: [`Year 1 begins. Seat ${KING_SEAT} wears the crown.`],
   };
 }
 
-// Simple deterministic-ish starter deck: repeat the sample set a few times so
-// there are enough cards to draft. Replace with the real ~110-card deck.
-function shuffleStarter() {
+// Simple deterministic set of card copies: repeat the sample set a few times
+// so there are enough cards to draft. Replace with the real ~110-card deck.
+// Shuffled once via the `random` plugin (§3 guardrail: no Math.random()) by
+// the caller above — this just builds the unshuffled list.
+function buildStarterDeck() {
   const deck = [];
   for (let copy = 0; copy < 4; copy++) {
     for (const c of CARDS) deck.push({ uid: `${c.id}_${copy}`, cardId: c.id });
   }
-  return deck; // boardgame.io's random plugin should shuffle in a move if needed
+  return deck;
 }

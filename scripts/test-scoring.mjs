@@ -14,7 +14,12 @@ function assertInRange(label, value, min, max) {
   console.log(`  ok: ${label} = ${value} (within [${min}, ${max}])`);
 }
 
-const G = setup({ ctx: { numPlayers: 4, playOrder: ['0', '1', '2', '3'] } });
+// setup() shuffles the starter deck via the `random` plugin (§3 guardrail:
+// no Math.random()). This script calls setup() directly, bypassing
+// boardgame.io's plugin injection, so it needs a stub — deck order is
+// irrelevant to the scoring math this test checks, so identity is fine.
+const random = { Shuffle: (arr) => arr };
+const G = setup({ ctx: { numPlayers: 4, playOrder: ['0', '1', '2', '3'] }, random });
 G.offices.steward = '1';
 
 for (let y = 1; y <= 6; y++) {

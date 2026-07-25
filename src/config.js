@@ -79,6 +79,10 @@ export const CONFIG = {
   startingTaxLaw: 'medium',
   startingLevyLaw: 'medium',
 
+  // ---- Draft (§9 Phase 2 — Inis-style pick-and-pass) ----------------------
+  draftPackSize: 5,      // cards dealt to each seat's pack at Draft's start
+  draftPicksPerYear: 4,  // pick-and-pass rounds; the (packSize - this) leftover is discarded
+
   // ---- War (§7) ----------------------------------------------------------
   casualties: {
     winPerN: 4,   // lose 1 cube per N committed on the winning side

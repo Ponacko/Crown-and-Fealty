@@ -70,25 +70,78 @@ export const councilMoves = {
 };
 
 // ---------------------------------------------------------------------------
-// PHASE 2 — DRAFT (pick-and-pass in the real game; simplified deal here)
+// PHASE 2 — DRAFT (§9 Phase 2: Inis-style pick-and-pass)
+// Deal every seat a pack of CONFIG.draftPackSize cards; each round every
+// seat keeps one, then packs pass left; repeat for CONFIG.draftPicksPerYear
+// rounds and discard whatever's left in each pack.
 // ---------------------------------------------------------------------------
-export const draftMoves = {
-  // TODO(draft): implement Inis-style pick-and-pass. For now, each player
-  // draws up to 4 cards from the top of the deck.
-  drawHand({ G, playerID, random }) {
-    const p = G.players[playerID];
-    if (p.hand.length >= 4) return INVALID_MOVE;
-    while (p.hand.length < 4 && G.deck.length) {
-      p.hand.push(G.deck.shift());
-    }
-    G.log.push(`Seat ${playerID} drafts up to 4 cards.`);
-  },
 
-  endDraft({ G, playerID, events }) {
-    if (!isKing(G, playerID)) return INVALID_MOVE;
-    // Actions-phase turn order seeds each seat's actionsLeft as their turn
-    // begins (see game.js) — nothing to prep here.
-    events.endPhase();
+// Called from game.js's draft phase onBegin. Returns true once the draft is
+// already fully resolved (e.g. the shared deck was too depleted to deal
+// anything), so the caller knows to end the phase immediately.
+export function dealDraftPacks(G, ctx, random) {
+  const seats = ctx.playOrder;
+
+  // §9: "a real draft occurs every year" — reshuffle the discard pile back
+  // into the deck if it can't cover a full deal, rather than letting the
+  // draft quietly run dry over a 6-year game.
+  const needed = seats.length * CONFIG.draftPackSize;
+  if (G.deck.length < needed && G.discard.length > 0) {
+    G.deck.push(...random.Shuffle(G.discard));
+    G.discard = [];
+    G.log.push('Deck depleted — reshuffled the discard pile back in.');
+  }
+
+  G.draftRound = 1;
+  G.draftPicksThisRound = {};
+  G.draftPacks = {};
+  for (const seat of seats) {
+    G.draftPacks[seat] = G.deck.splice(0, Math.min(CONFIG.draftPackSize, G.deck.length));
+  }
+  G.log.push(`Draft begins: each seat dealt a ${CONFIG.draftPackSize}-card pack.`);
+  return settleDraftRound(G, seats);
+}
+
+// Once every seat has either picked this round or has nothing left to pick,
+// pass packs left (in seating order) and start the next round — or, past
+// the final round, discard the leftovers and end the draft. Loops so a
+// thin/exhausted deck (packs empty for everyone) cascades straight through
+// to the end instead of stalling. Returns true once the draft has ended.
+function settleDraftRound(G, seats) {
+  for (;;) {
+    for (const seat of seats) {
+      if (G.draftPacks[seat].length === 0) G.draftPicksThisRound[seat] = true;
+    }
+    if (!seats.every((s) => G.draftPicksThisRound[s])) return false;
+
+    if (G.draftRound >= CONFIG.draftPicksPerYear) {
+      for (const seat of seats) G.discard.push(...G.draftPacks[seat]);
+      G.draftPacks = null;
+      G.log.push('Draft complete; leftover cards discarded.');
+      return true;
+    }
+
+    const n = seats.length;
+    const rotated = {};
+    for (let i = 0; i < n; i++) rotated[seats[(i + 1) % n]] = G.draftPacks[seats[i]];
+    G.draftPacks = rotated;
+    G.draftRound += 1;
+    G.draftPicksThisRound = {};
+    G.log.push(`Draft round ${G.draftRound} begins.`);
+  }
+}
+
+export const draftMoves = {
+  pickCard({ G, ctx, playerID, events }, uid) {
+    const pack = G.draftPacks && G.draftPacks[playerID];
+    if (!pack || G.draftPicksThisRound[playerID]) return INVALID_MOVE;
+    const idx = pack.findIndex((c) => c.uid === uid);
+    if (idx < 0) return INVALID_MOVE;
+    const [picked] = pack.splice(idx, 1);
+    G.players[playerID].hand.push(picked);
+    G.draftPicksThisRound[playerID] = true;
+    G.log.push(`Seat ${playerID} drafts ${card(picked.cardId).name}.`);
+    if (settleDraftRound(G, ctx.playOrder)) events.endPhase();
   },
 };
 

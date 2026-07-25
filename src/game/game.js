@@ -8,6 +8,7 @@ import { setup } from './setup.js';
 import {
   councilMoves,
   draftMoves,
+  dealDraftPacks,
   actionMoves,
   warMoves,
   harvestMoves,
@@ -49,10 +50,14 @@ export const CrownAndFealty = {
       moves: councilMoves,
     },
     draft: {
-      // §5 Phase 2: all players active simultaneously for the pick step
-      // (the real Inis-style pick-and-pass lands in M2a; for now everyone
-      // just drafts up to a full hand under the inherited ActivePlayers.ALL).
+      // §5/§9 Phase 2 (Inis-style pick-and-pass): every seat is active at
+      // once (inherited ActivePlayers.ALL) for each pick step. Packs are
+      // dealt here; the phase ends itself once dealDraftPacks/pickCard
+      // (moves.js) resolve the final round.
       next: 'actions',
+      onBegin: ({ G, ctx, random, events }) => {
+        if (dealDraftPacks(G, ctx, random)) events.endPhase();
+      },
       moves: draftMoves,
     },
     actions: {

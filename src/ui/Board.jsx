@@ -132,13 +132,24 @@ function PhaseControls({ phase, moves, G, me, isKing }) {
         </div>
       );
 
-    case 'draft':
+    case 'draft': {
+      // §9 Phase 2: pick one card from your current pack; once everyone's
+      // picked, packs auto-pass left and the phase auto-ends after the
+      // final round (see moves.js dealDraftPacks/pickCard).
+      const pack = G.draftPacks ? G.draftPacks[me] : null;
       return (
         <div>
-          <button style={btn} onClick={() => moves.drawHand()}>Draft up to 4 cards</button>
-          {isKing && <button style={btn} onClick={() => moves.endDraft()}>END DRAFT ▶</button>}
+          <div>Draft round {G.draftRound} / {CONFIG.draftPicksPerYear}</div>
+          {pack && pack.length > 0
+            ? pack.map((c) => (
+                <button key={c.uid} style={btn} onClick={() => moves.pickCard(c.uid)}>
+                  Pick {cardName(c.uid)}
+                </button>
+              ))
+            : <div>Nothing left in your pack this round.</div>}
         </div>
       );
+    }
 
     case 'actions': {
       const mine = G.players[me];

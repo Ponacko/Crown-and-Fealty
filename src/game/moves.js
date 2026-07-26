@@ -345,8 +345,8 @@ export const actionMoves = {
     const held = p.hand[idx];
     const def = card(held.cardId);
     if (!def) return INVALID_MOVE;
-  const bluff = args[0] && typeof args[0] === 'object' && args[0].faceDown;
-  if (def.crownOnly && !isKing(G, playerID)) {
+    const bluff = args[0] && typeof args[0] === 'object' && args[0].faceDown;
+    if (def.crownOnly && !isKing(G, playerID)) {
       // A duke may hold crown-only cards (bank for a coup) but not play them.
       return INVALID_MOVE;
     }

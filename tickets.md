@@ -135,12 +135,12 @@ winner. Design §10.
 
 **Blocked by:** M4.1, M2c
 
-- [ ] Total **all** troops per side (civil war is total, not committed subsets)
-- [ ] + Marshal (+2, on the king's side unless granted away)
-- [ ] + Castles (+1 per castle on a defender-side province)
-- [ ] + revealed Schemes (via the M2c hook)
-- [ ] Larger total wins; no randomness in civil wars
-- [ ] Totals include castles/Marshal/schemes correctly in a test case
+- [x] Total **all** troops per side (civil war is total, not committed subsets)
+- [x] + Marshal (+2, on the king's side unless granted away)
+- [x] + Castles (+1 per castle on a defender-side province)
+- [x] + revealed Schemes (via the M2c hook)
+- [x] Larger total wins; no randomness in civil wars
+- [x] Totals include castles/Marshal/schemes correctly in a test case
 
 ## M4.3 — Rebellion: consequences
 

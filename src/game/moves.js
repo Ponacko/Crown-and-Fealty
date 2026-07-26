@@ -33,6 +33,39 @@ function setRebellionStage(events, activePlayers) {
   if (events?.setActivePlayers) events.setActivePlayers({ value: activePlayers });
 }
 
+function rebellionCoalition(G, seat) {
+  const rebellion = G.activeRebellion;
+  if (seat === rebellion.leader || rebellion.sides?.[seat] === 'rebel') return 'rebels';
+  if (seat === G.crownHolder || rebellion.sides?.[seat] === 'loyal') return 'king';
+  return 'neutral';
+}
+
+// §10 / ADR-0003: civil war strength uses every standing troop, then adds
+// only bonuses belonging to a player's coalition. Neutral seats contribute
+// nothing, including their castles and a Marshal they happen to hold.
+function rebellionBattleStrength(G, revealed) {
+  const totals = { rebels: 0, king: 0 };
+  for (const [seat, player] of Object.entries(G.players)) {
+    const coalition = rebellionCoalition(G, seat);
+    if (coalition !== 'neutral') totals[coalition] += player.troops;
+  }
+  for (const province of Object.values(G.provinces)) {
+    if (province.building !== 'castle' || province.owner == null) continue;
+    const coalition = rebellionCoalition(G, province.owner);
+    if (coalition !== 'neutral') totals[coalition] += 1;
+  }
+  const marshal = G.offices.marshal;
+  if (marshal != null) {
+    const coalition = rebellionCoalition(G, marshal);
+    if (coalition !== 'neutral') totals[coalition] += CONFIG.marshalBattleBonus;
+  }
+  for (const [seat, bonus] of Object.entries(revealed.attackBonusBySeat)) {
+    const coalition = rebellionCoalition(G, seat);
+    if (coalition !== 'neutral') totals[coalition] += bonus;
+  }
+  return totals;
+}
+
 export function hasCharacter(G, seat, effect) {
   return G.players[seat].characters.some((cardId) => {
     const definition = card(cardId);
@@ -793,7 +826,8 @@ export const warMoves = {
     }
   },
 
-  // Resolve rebellion. M4.2 will expand the locked sides into coalitions.
+  // Resolve rebellion. M4.3 will expand the winning branch into full land and
+  // Favor consequences; this move owns the deterministic battle result.
   resolveRebellion({ G, playerID }) {
     if (!isKing(G, playerID)) return INVALID_MOVE;
     if (!G.activeRebellion) return INVALID_MOVE;
@@ -801,11 +835,10 @@ export const warMoves = {
     const rebel = G.activeRebellion.leader;
     const P = CONFIG.prestige;
     const revealed = resolveSchemes(G, 'rebellionBattle');
-    const rebelForce = G.players[rebel].troops +
-      (revealed.attackBonusBySeat[rebel] || 0);
-    const kingForce =
-      G.players[G.crownHolder].troops + CONFIG.marshalBattleBonus +
-      (revealed.attackBonusBySeat[G.crownHolder] || 0);
+    const strength = rebellionBattleStrength(G, revealed);
+    const rebelForce = strength.rebels;
+    const kingForce = strength.king;
+    G.log.push(`REBELLION STRENGTH: rebels ${rebelForce}, king ${kingForce}.`);
 
     if (rebelForce > kingForce) {
       // Usurpation: crown changes hands (§10). Capital travels with the crown.

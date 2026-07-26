@@ -113,7 +113,7 @@ export const CONFIG = {
     losePerN: 2,  // lose 1 cube per N committed on the losing side (double)
   },
   warReparationsGold: 3,     // king pays on a loss
-  warModifierDeck: [-1, 0, 0, 1, 2], // tiny near-deterministic swing deck (§7.4)
+  warModifierDeck: [-1, 0, 1, 2], // tiny near-deterministic swing deck (§7.4)
 
   // ---- Offices (§8) ------------------------------------------------------
   // Marshal is the king's by default; only civilian offices are grantable,

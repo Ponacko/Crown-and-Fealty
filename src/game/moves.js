@@ -191,7 +191,12 @@ export const councilMoves = {
     if (!isKing(G, playerID)) return INVALID_MOVE;
     const fk = G.foreignKingdoms.find((k) => k.id === kingdomId && !k.conquered);
     if (!fk) return INVALID_MOVE;
-    G.pendingWar = { kingdomId, commits: {} };
+    G.pendingWar = {
+      kingdomId,
+      commits: {},
+      availableTroops: {},
+      revealed: false,
+    };
     G.log.push(`King declares war on ${fk.name} (garrison ${fk.garrison}).`);
   },
 
@@ -482,70 +487,120 @@ export const actionMoves = {
 // ---------------------------------------------------------------------------
 // PHASE 4 — WAR & REBELLION
 // ---------------------------------------------------------------------------
+function evaluateLevyCommitments(G) {
+  for (const duke of Object.keys(G.favor)) {
+    const committed = G.pendingWar.commits[duke] || 0;
+    const available = G.pendingWar.availableTroops?.[duke] ?? G.players[duke].troops;
+    const duty = levyDuty(G, duke);
+    if (committed < duty && committed < available) {
+      adjustFavor(G, duke, CONFIG.favor.onUnderCommitLevy, 'under-commit');
+      G.casusBelli[duke] = (G.casusBelli[duke] || 0) + 1;
+      G.log.push(`Seat ${duke} under-commits levy duty (${committed}/${duty}); Casus Belli placed.`);
+    } else if (committed > duty) {
+      adjustFavor(G, duke, CONFIG.favor.onExceedLevy, 'exceeded levy duty');
+      G.log.push(`Seat ${duke} exceeds levy duty (${committed}/${duty}).`);
+    }
+  }
+}
+
+function warAttackStrength(G, commits, schemeBonus) {
+  let attack = schemeBonus;
+  for (const [seat, committed] of Object.entries(commits)) {
+    if (committed <= 0) continue;
+    attack += characterStrength(G, seat);
+    if (G.offices.marshal === seat) attack += CONFIG.marshalBattleBonus;
+  }
+  return attack;
+}
+
+// Resolve the external war. Winner distribution and defeat consequences are
+// handled by M3.2; this seam owns duty, strength, modifier, and casualties.
+function resolveExternalWar({ G, playerID, random }, modifierIndex) {
+  if (!isKing(G, playerID)) return INVALID_MOVE;
+  if (!G.pendingWar) return INVALID_MOVE;
+  if (!G.pendingWar.revealed) return INVALID_MOVE;
+  const fk = G.foreignKingdoms.find((k) => k.id === G.pendingWar.kingdomId);
+  if (!fk || fk.conquered) return INVALID_MOVE;
+  const dialCommits = { ...G.pendingWar.commits };
+  evaluateLevyCommitments(G);
+  const revealed = resolveSchemes(G, 'externalWar');
+  const committed = Object.values(G.pendingWar.commits).reduce((a, b) => a + b, 0);
+  // Near-deterministic swing (§7.4). If no index passed, pick randomly.
+  const deck = CONFIG.warModifierDeck;
+  const mod = deck[
+    typeof modifierIndex === 'number'
+      ? Math.max(0, Math.min(modifierIndex, deck.length - 1))
+      : Math.floor((random ? random.Number() : 0) * deck.length)
+  ];
+  const attack = committed + warAttackStrength(G, G.pendingWar.commits, revealed.attackBonus);
+  const defense = fk.garrison + mod + revealed.garrisonBonus;
+  const P = CONFIG.prestige;
+
+  if (attack > defense) {
+    fk.conquered = true;
+    G.players[G.crownHolder].prestige += P.warWinKing;
+    // Duty branding and Casus Belli were applied before resolution. Prestige
+    // also uses the original revealed dial, before Bribed Captains desertions.
+    for (const duke of Object.keys(G.favor)) {
+      if ((dialCommits[duke] || 0) >= levyDuty(G, duke)) {
+        G.players[duke].prestige += P.warWinDutifulDuke;
+      }
+    }
+    G.log.push(`WAR WON vs ${fk.name} (${attack} > ${defense}).`);
+    // TODO(distribution §7.6): honor domainLimit, grant surplus to dukes
+    // (+2 favor each), sack undistributable provinces (-1 favor all).
+  } else {
+    G.warLostThisYear = true;
+    G.players[G.crownHolder].prestige += P.warLossKing;
+    G.players[G.crownHolder].gold -= CONFIG.warReparationsGold; // may go negative -> TODO borrow
+    for (const duke of Object.keys(G.favor)) {
+      adjustFavor(G, duke, CONFIG.favor.onKingWarLoss, 'king lost a war');
+    }
+    G.log.push(`WAR LOST vs ${fk.name} (${attack} <= ${defense}).`);
+    // TODO(§7.7): occupy one border province of the king's choice.
+  }
+
+  // Casualties (§7.5). Winning side per winPerN, losing side per losePerN.
+  const won = attack > defense;
+  const per = won ? CONFIG.casualties.winPerN : CONFIG.casualties.losePerN;
+  for (const [seat, c] of Object.entries(G.pendingWar.commits)) {
+    const dead = Math.floor(c / per);
+    G.players[seat].troops = Math.max(0, G.players[seat].troops - dead);
+    G.players[seat].committed = null;
+  }
+  G.pendingWar = null;
+}
+
 export const warMoves = {
-  // Secret troop commitment (dial). Stored per seat; revealed on resolveWar.
   commitTroops({ G, playerID }, count) {
     if (!G.pendingWar) return INVALID_MOVE;
+    G.pendingWar.availableTroops ??= {};
+    G.pendingWar.availableTroops[playerID] ??= G.players[playerID].troops;
     count = Math.max(0, Math.min(count | 0, G.players[playerID].troops));
-    // §9: a Papal Legate forbids deliberately falling short of levy duty.
-    if (hasCharacter(G, playerID, 'legate') && count < levyDuty(G, playerID)) {
+    const heldBack = count < G.pendingWar.availableTroops[playerID];
+    if (hasCharacter(G, playerID, 'legate') &&
+      count < levyDuty(G, playerID) && heldBack) {
       return INVALID_MOVE;
     }
     G.pendingWar.commits[playerID] = count;
     G.players[playerID].committed = count;
   },
 
-  // Resolve the external war. SIMPLIFIED (§7): sum commits + a modifier vs
-  // garrison. Winner keeps/distributes provinces (distribution is TODO).
-  resolveWar({ G, playerID, random }, modifierIndex) {
+  revealWar({ G, playerID, random }, modifierIndex) {
     if (!isKing(G, playerID)) return INVALID_MOVE;
     if (!G.pendingWar) return INVALID_MOVE;
-    const fk = G.foreignKingdoms.find((k) => k.id === G.pendingWar.kingdomId);
-    const revealed = resolveSchemes(G, 'externalWar');
-    const committed = Object.values(G.pendingWar.commits).reduce((a, b) => a + b, 0);
-    // Near-deterministic swing (§7.4). If no index passed, pick randomly.
-    const deck = CONFIG.warModifierDeck;
-    const mod = deck[
-      typeof modifierIndex === 'number'
-        ? Math.max(0, Math.min(modifierIndex, deck.length - 1))
-        : Math.floor((random ? random.Number() : Math.random()) * deck.length)
-    ];
-    const attack = committed + revealed.attackBonus;
-    const defense = fk.garrison + mod + revealed.garrisonBonus;
-    const P = CONFIG.prestige;
+    const allSeatsCommitted = Object.keys(G.players).every((seat) =>
+      Object.prototype.hasOwnProperty.call(G.pendingWar.commits, seat));
+    if (!allSeatsCommitted) return INVALID_MOVE;
+    G.pendingWar.revealed = true;
+    G.log.push('War dials revealed simultaneously.');
+    return resolveExternalWar({ G, playerID, random }, modifierIndex);
+  },
 
-    if (attack > defense) {
-      fk.conquered = true;
-      G.players[G.crownHolder].prestige += P.warWinKing;
-      // Dutiful dukes (committed >= their levy duty) +1. TODO: compute duty.
-      for (const duke of Object.keys(G.favor)) {
-        if ((G.pendingWar.commits[duke] || 0) > 0) {
-          G.players[duke].prestige += P.warWinDutifulDuke;
-        }
-      }
-      G.log.push(`WAR WON vs ${fk.name} (${attack} > ${defense}).`);
-      // TODO(distribution §7.6): honor domainLimit, grant surplus to dukes
-      // (+2 favor each), sack undistributable provinces (-1 favor all).
-    } else {
-      G.warLostThisYear = true;
-      G.players[G.crownHolder].prestige += P.warLossKing;
-      G.players[G.crownHolder].gold -= CONFIG.warReparationsGold; // may go negative -> TODO borrow
-      for (const duke of Object.keys(G.favor)) {
-        adjustFavor(G, duke, CONFIG.favor.onKingWarLoss, 'king lost a war');
-      }
-      G.log.push(`WAR LOST vs ${fk.name} (${attack} <= ${defense}).`);
-      // TODO(§7.7): occupy one border province of the king's domain.
-    }
-
-    // Casualties (§7.5). Winning side per winPerN, losing side per losePerN.
-    const won = attack > defense;
-    const per = won ? CONFIG.casualties.winPerN : CONFIG.casualties.losePerN;
-    for (const [seat, c] of Object.entries(G.pendingWar.commits)) {
-      const dead = Math.floor(c / per);
-      G.players[seat].troops = Math.max(0, G.players[seat].troops - dead);
-      G.players[seat].committed = null;
-    }
-    G.pendingWar = null;
+  // Kept as the resolution seam after a reveal; new game flow enters through
+  // revealWar so incomplete dials cannot resolve.
+  resolveWar(context, modifierIndex) {
+    return resolveExternalWar(context, modifierIndex);
   },
 
   // A duke declares rebellion. SIMPLIFIED (§10): total troops per side, no
@@ -602,6 +657,7 @@ export const warMoves = {
 
   endWarPhase({ G, playerID, events }) {
     if (!isKing(G, playerID)) return INVALID_MOVE;
+    if (G.pendingWar) return INVALID_MOVE;
     events.endPhase();
   },
 };

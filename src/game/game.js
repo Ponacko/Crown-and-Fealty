@@ -87,8 +87,9 @@ export const CrownAndFealty = {
       moves: actionMoves,
     },
     warAndRebellion: {
-      // §5 Phase 4: who's active when is finished in M3/M4. For now, inherit
-      // ActivePlayers.ALL so commitTroops/declareRebellion/etc. keep working.
+      // §5 Phase 4: all seats can set a secret war dial simultaneously; the
+      // King reveals once every seat has committed. Rebellion sequencing is
+      // layered on by M4.
       next: 'harvest',
       moves: warMoves,
     },

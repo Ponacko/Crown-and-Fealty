@@ -257,7 +257,7 @@ function PhaseControls({ phase, moves, G, me, isKing }) {
         <div>
           {G.pendingWar && <div>{num}
             <button style={btn} onClick={() => moves.commitTroops(n)}>Commit troops</button>
-            {isKing && <button style={btn} onClick={() => moves.resolveWar()}>Resolve war</button>}
+            {isKing && <button style={btn} onClick={() => moves.revealWar()}>Reveal dials &amp; resolve war</button>}
           </div>}
           {!isKing && !G.activeRebellion &&
             <button style={btn} onClick={() => moves.declareRebellion()}>⚔ DECLARE REBELLION</button>}

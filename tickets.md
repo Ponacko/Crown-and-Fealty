@@ -95,12 +95,12 @@ Builds on the existing `commitTroops`/`resolveWar`.
 
 **Blocked by:** M1
 
-- [ ] Each duke's owed troops computed from `CONFIG.levyLaw[G.levyLaw]` × their total levy value (floored)
-- [ ] Committing ≥ duty: no penalty. Exceeding duty: +1 favor. Under duty: −1 favor **and** a Casus Belli placed (`G.casusBelli[duke]++`); branded in the log
-- [ ] During the Phase 4 war step, all participants set a dial simultaneously; a `revealWar` step reveals together, wired to invoke the M2c scheme-reveal hook (Ambush, Poison the Wells, Bribed Captains)
-- [ ] Resolution compares committed strength (+ Marshal +2 if fighting, + relevant schemes/characters) vs. `garrison + CONFIG.warModifierDeck` draw (via `random`)
-- [ ] Casualties applied per §7.5
-- [ ] Dukes are scored/branded correctly by their commitment vs. duty
+- [x] Each duke's owed troops computed from `CONFIG.levyLaw[G.levyLaw]` × their total levy value (floored)
+- [x] Committing ≥ duty: no penalty. Exceeding duty: +1 favor. Under duty: −1 favor **and** a Casus Belli placed (`G.casusBelli[duke]++`); branded in the log
+- [x] During the Phase 4 war step, all participants set a dial simultaneously; a `revealWar` step reveals together, wired to invoke the M2c scheme-reveal hook (Ambush, Poison the Wells, Bribed Captains)
+- [x] Resolution compares committed strength (+ Marshal +2 if fighting, + relevant schemes/characters) vs. `garrison + CONFIG.warModifierDeck` draw (via `random`)
+- [x] Casualties applied per §7.5
+- [x] Dukes are scored/branded correctly by their commitment vs. duty
 
 ## M3.2 — War: consequences (victory distribution + defeat)
 

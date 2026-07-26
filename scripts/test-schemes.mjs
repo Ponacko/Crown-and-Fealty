@@ -44,7 +44,7 @@ assert(storageGame.discard.length === 0, 'scheme was discarded before its trigge
 const ambushGame = makeGame();
 ambushGame.players['1'].troops = 6;
 playScheme(ambushGame, '1', 'sch_ambush');
-ambushGame.pendingWar = { kingdomId: 'fk_weak', commits: { '1': 6 } };
+ambushGame.pendingWar = { kingdomId: 'fk_weak', commits: { '1': 6 }, revealed: true };
 warMoves.resolveWar({ G: ambushGame, playerID: '0', random }, 1);
 assert(ambushGame.foreignKingdoms.find((k) => k.id === 'fk_weak').conquered,
   'Ambush did not add strength to the war');
@@ -54,7 +54,7 @@ assert(ambushGame.players['1'].schemes.length === 0, 'Ambush was not consumed');
 const poisonGame = makeGame();
 poisonGame.players['1'].troops = 9;
 playScheme(poisonGame, '1', 'sch_poison');
-poisonGame.pendingWar = { kingdomId: 'fk_weak', commits: { '1': 9 } };
+poisonGame.pendingWar = { kingdomId: 'fk_weak', commits: { '1': 9 }, revealed: true };
 warMoves.resolveWar({ G: poisonGame, playerID: '0', random }, 1);
 const poisonedKingdom = poisonGame.foreignKingdoms.find((k) => k.id === 'fk_weak');
 assert(!poisonedKingdom.conquered, 'Poison did not strengthen the garrison');
@@ -67,7 +67,9 @@ const bribeGame = makeGame();
 bribeGame.players['0'].troops = 2;
 bribeGame.players['1'].troops = 7;
 playScheme(bribeGame, '1', 'sch_bribe', '0');
-bribeGame.pendingWar = { kingdomId: 'fk_weak', commits: { '0': 2, '1': 7 } };
+bribeGame.pendingWar = {
+  kingdomId: 'fk_weak', commits: { '0': 2, '1': 7 }, revealed: true,
+};
 warMoves.resolveWar({ G: bribeGame, playerID: '0', random }, 1);
 assert(!bribeGame.foreignKingdoms.find((k) => k.id === 'fk_weak').conquered,
   'Bribed Captains did not desert opposing cubes');
@@ -86,7 +88,7 @@ assert(rebellionGame.crownHolder === '1', 'Ambush did not affect rebellion stren
 // Any card can be a face-down bluff; it is revealed as a dud and discarded.
 const bluffGame = makeGame();
 playScheme(bluffGame, '1', 'act_taxfarmers');
-bluffGame.pendingWar = { kingdomId: 'fk_weak', commits: { '1': 0 } };
+bluffGame.pendingWar = { kingdomId: 'fk_weak', commits: { '1': 0 }, revealed: true };
 warMoves.resolveWar({ G: bluffGame, playerID: '0', random }, 1);
 assert(bluffGame.players['1'].schemes.length === 0, 'bluff was not consumed');
 assert(bluffGame.discard.some((held) => held.cardId === 'act_taxfarmers'),

@@ -103,6 +103,10 @@ function CardControls({ held, moves, G, me, isKing }) {
     return <button style={btn} disabled>Hold {definition.name} (crown-only)</button>;
   }
 
+  if (definition.type === 'decree') {
+    return <button style={btn} disabled>Hold {definition.name} (propose in Council)</button>;
+  }
+
   if (definition.effect === 'envoy') {
     return G.foreignKingdoms.filter((kingdom) => !kingdom.conquered).map((kingdom) => (
       <button key={`${held.uid}-${kingdom.id}`} style={btn}
@@ -196,6 +200,17 @@ function PhaseControls({ phase, moves, G, me, isKing }) {
                 Pay {n}g → {seat}
               </button>))}
           </div>}
+          <div>Propose decree:
+            {isKing
+              ? G.players[me].hand
+                .filter((held) => CARDS.find((card) => card.id === held.cardId)?.type === 'decree')
+                .map((held) => (
+                  <button key={held.uid} style={btn} disabled={G.pendingVote}
+                    onClick={() => moves.proposeDecree(held.uid)}>
+                    {cardName(held.uid)}
+                  </button>))
+              : <span> king only</span>}
+          </div>
           <div>Declare war:
             {G.foreignKingdoms.filter((k) => !k.conquered).map((k) =>
               <button key={k.id} style={btn} onClick={() => moves.declareWar(k.id)}>

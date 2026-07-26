@@ -30,8 +30,7 @@ function voteAll(G, choices) {
 
 // Laws can no longer be changed by a direct king move.
 const directGame = makeGame();
-assert(councilMoves.setLaw(context(directGame, '0'), 'taxLaw', 'high') === INVALID_MOVE,
-  'direct law setter still bypasses the council');
+assert(!('setLaw' in councilMoves), 'direct law setter still bypasses the council');
 
 // A Chancellor's double vote is enough to pass a proposal that would otherwise
 // tie: the Chancellor and one duke vote yes, the King and one duke vote no.
@@ -105,5 +104,14 @@ for (const seat of ['0', '1', '2', '3']) assert(!dispatch(seat, 'vote', true),
   `seat ${seat} could not vote through the reducer`);
 assert(!dispatch('0', 'endCouncil'), 'King could not end a resolved Council');
 assert(state.ctx.phase === 'draft', 'Council did not advance after resolution');
+
+// Prerogative Council actions consume the same two-proposal budget as votes.
+const proposalLimitGame = makeGame();
+assert(councilMoves.declareWar(context(proposalLimitGame, '0'), 'fk_weak') !== INVALID_MOVE,
+  'first Council proposal was rejected');
+assert(councilMoves.grantOffice(context(proposalLimitGame, '0'), 'steward', '1') !== INVALID_MOVE,
+  'second Council proposal was rejected');
+assert(councilMoves.proposeLaw(context(proposalLimitGame, '0'), 'taxLaw', 'high') === INVALID_MOVE,
+  'King exceeded the annual Council proposal limit');
 
 console.log('PASS: M5.1 council voting checks.');

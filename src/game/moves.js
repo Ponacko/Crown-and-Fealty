@@ -84,11 +84,16 @@ function resolveCouncilVote(G) {
 }
 
 function proposeVote({ G, playerID }, proposal) {
-  if (!isKing(G, playerID) || G.pendingVote || (G.councilProposals || 0) >= 2) {
+  if (!isKing(G, playerID) || G.pendingVote || !reserveCouncilProposal(G)) {
     return INVALID_MOVE;
   }
-  G.councilProposals = (G.councilProposals || 0) + 1;
   G.pendingVote = { proposal, votes: {} };
+}
+
+function reserveCouncilProposal(G) {
+  if ((G.councilProposals || 0) >= CONFIG.councilProposalsPerYear) return false;
+  G.councilProposals = (G.councilProposals || 0) + 1;
+  return true;
 }
 
 function rebellionDukeOrder(G, ctx) {
@@ -435,12 +440,6 @@ export const councilMoves = {
     return proposeVote({ G, playerID }, { type: 'law', which, value });
   },
 
-  // Kept as a named rejection so callers cannot accidentally retain the old
-  // direct-set path while migrating to proposeLaw/vote.
-  setLaw() {
-    return INVALID_MOVE;
-  },
-
   // Decrees are consumed only after the crown-holder's Council proposal wins.
   // M2d supplies the individual decree effects; this ticket owns their vote
   // and the single resolved-decree record.
@@ -477,6 +476,7 @@ export const councilMoves = {
     if (G.offices[office] == null && seated >= CONFIG.grantableSeats) {
       return INVALID_MOVE; // no seats left
     }
+    if (!reserveCouncilProposal(G)) return INVALID_MOVE;
     G.offices[office] = dukeSeat;
     adjustFavor(G, dukeSeat, CONFIG.favor.onGrantOffice, `granted ${office}`);
     G.log.push(`King grants ${office} to seat ${dukeSeat}.`);
@@ -487,6 +487,7 @@ export const councilMoves = {
     if (!isKing(G, playerID)) return INVALID_MOVE;
     const fk = G.foreignKingdoms.find((k) => k.id === kingdomId && !k.conquered);
     if (!fk) return INVALID_MOVE;
+    if (!reserveCouncilProposal(G)) return INVALID_MOVE;
     G.pendingWar = {
       kingdomId,
       commits: {},

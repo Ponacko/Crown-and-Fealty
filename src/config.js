@@ -18,6 +18,7 @@ export const CONFIG = {
 
   // ---- Action economy ----------------------------------------------------
   actionsPerTurn: 3,        // actions each player takes in the Actions phase
+  councilProposalsPerYear: 2, // §5: maximum Council proposals per year
   troopCost: 1,             // gold per cube when mustering
   buildCost: 3,             // gold to build a Market or Castle
   giftCost: 2,              // gold per gift

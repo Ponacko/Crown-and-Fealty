@@ -36,7 +36,7 @@ rules code.
 
 **Stubbed, with `TODO(...)` markers in code — your vibecoding targets:**
 - `setup.js` → **auction the crown** (currently seat 0 is just king).
-- `moves.js` (council) → **council voting** (laws currently set directly).
+- `moves.js` (council) → decree effects and Revocation; Council law voting is wired.
 - `moves.js` (draft) → **Inis-style pick-and-pass** (currently a straight deal).
 - `moves.js` (war) → **levy-duty calc, conquest distribution honoring Domain Limit, border occupation on loss, reparations borrowing**.
 - `moves.js` (rebellion) → **side-picking (loyalist/rebel/neutral), binding offers, castle/marshal/scheme bonuses, land stripping**.

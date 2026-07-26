@@ -162,11 +162,11 @@ setting them directly. Design §5 Council.
 
 **Blocked by:** M1
 
-- [ ] One vote per player; Chancellor's vote counts double (`CONFIG.chancellorVoteWeight`); king breaks ties
-- [ ] Open bribery allowed — cash transfers are legal moves during the vote
-- [ ] §5 favor consequences applied (raising a law angers dissenters; lowering pleases all)
-- [ ] Laws/decrees only change via a resolved vote
-- [ ] Chancellor double-vote and king tiebreak work correctly
+- [x] One vote per player; Chancellor's vote counts double (`CONFIG.chancellorVoteWeight`); king breaks ties
+- [x] Open bribery allowed — cash transfers are legal moves during the vote
+- [x] §5 favor consequences applied (raising a law angers dissenters; lowering pleases all)
+- [x] Laws/decrees only change via a resolved vote
+- [x] Chancellor double-vote and king tiebreak work correctly
 
 ## M5.2 — Revocation
 

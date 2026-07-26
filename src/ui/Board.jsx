@@ -173,18 +173,29 @@ function PhaseControls({ phase, moves, G, me, isKing }) {
 
   switch (phase) {
     case 'council':
-      // Only the crown-holder is ever active here (game.js turn order), so
-      // reaching this branch already implies isKing.
       return (
         <div>
-          <div>Tax law:
+          <div>Propose tax law:
             {['low', 'medium', 'high'].map((v) =>
-              <button key={v} style={btn} onClick={() => moves.setLaw('taxLaw', v)}>{v}</button>)}
+              <button key={v} style={btn} disabled={!isKing || G.pendingVote}
+                onClick={() => moves.proposeLaw('taxLaw', v)}>{v}</button>)}
           </div>
-          <div>Levy law:
+          <div>Propose levy law:
             {['low', 'medium', 'high'].map((v) =>
-              <button key={v} style={btn} onClick={() => moves.setLaw('levyLaw', v)}>{v}</button>)}
+              <button key={v} style={btn} disabled={!isKing || G.pendingVote}
+                onClick={() => moves.proposeLaw('levyLaw', v)}>{v}</button>)}
           </div>
+          {G.pendingVote && <div>
+            <b>Vote: {G.pendingVote.proposal.which || G.pendingVote.proposal.cardId}</b>
+            <button style={btn} onClick={() => moves.vote(true)}>YES</button>
+            <button style={btn} onClick={() => moves.vote(false)}>NO</button>
+          </div>}
+          {G.pendingVote && <div>Bribe a seat:
+            {Object.keys(G.players).filter((seat) => seat !== me).map((seat) => (
+              <button key={seat} style={btn} onClick={() => moves.transferGold(seat, n)}>
+                Pay {n}g → {seat}
+              </button>))}
+          </div>}
           <div>Declare war:
             {G.foreignKingdoms.filter((k) => !k.conquered).map((k) =>
               <button key={k.id} style={btn} onClick={() => moves.declareWar(k.id)}>
@@ -198,7 +209,8 @@ function PhaseControls({ phase, moves, G, me, isKing }) {
                   {o}→{d}
                 </button>))}
           </div>
-          <button style={btn} onClick={() => moves.endCouncil()}>END COUNCIL ▶</button>
+          <button style={btn} disabled={!isKing || G.pendingVote}
+            onClick={() => moves.endCouncil()}>END COUNCIL ▶</button>
         </div>
       );
 

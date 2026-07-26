@@ -16,8 +16,9 @@ import {
 
 const crownHolderPos = (G, ctx) => ctx.playOrder.indexOf(G.crownHolder);
 
-// §5: the crown-holder is always the sole actor in Council and Harvest, and
-// always leads off the Actions phase. A phase's `turn` config completely
+// §5: the crown-holder is the sole actor in Harvest and always leads off the
+// Actions phase. Council is simultaneous after the King proposes, so every
+// seat is active there. A phase's `turn` config completely
 // replaces the game-level default (no key-by-key merge), so anywhere we set
 // `turn.order` we own the whole turn config for that phase. boardgame.io
 // mutates each phase's `turn` object in place, so hand each phase its own
@@ -43,10 +44,11 @@ export const CrownAndFealty = {
 
   phases: {
     council: {
-      // §5 Council: only the crown-holder may act; other seats cannot.
+      // §5 Council: the King proposes; every seat may then vote or transfer
+      // cash openly. Move-level guards keep proposal/end controls royal.
       start: true,
       next: 'draft',
-      turn: crownHolderOnly(),
+      turn: { activePlayers: ActivePlayers.ALL },
       moves: councilMoves,
     },
     draft: {

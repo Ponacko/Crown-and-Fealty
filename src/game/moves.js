@@ -23,6 +23,73 @@ import {
 const isKing = (G, playerID) => playerID === G.crownHolder;
 const card = (cardId) => CARDS.find((c) => c.id === cardId);
 const REBELLION_SIDES = ['loyal', 'rebel', 'neutral'];
+const LAW_LEVELS = ['low', 'medium', 'high'];
+
+function transferGold({ G, playerID }, toSeat, amount) {
+  amount = amount | 0;
+  if (!(playerID in G.players) || !(toSeat in G.players) ||
+    toSeat === playerID || amount <= 0 || G.players[playerID].gold < amount) {
+    return INVALID_MOVE;
+  }
+  G.players[playerID].gold -= amount;
+  G.players[toSeat].gold += amount;
+  G.log.push(`Seat ${playerID} transfers ${amount}g to seat ${toSeat}.`);
+}
+
+function voteWeight(G, seat) {
+  return G.offices.chancellor === seat ? CONFIG.chancellorVoteWeight : 1;
+}
+
+function resolveCouncilVote(G) {
+  const vote = G.pendingVote;
+  const proposal = vote.proposal;
+  let yes = 0;
+  let no = 0;
+  for (const [seat, choice] of Object.entries(vote.votes)) {
+    if (choice) yes += voteWeight(G, seat);
+    else no += voteWeight(G, seat);
+  }
+
+  const passed = yes > no || (yes === no && vote.votes[G.crownHolder]);
+  if (passed) {
+    if (proposal.type === 'law') {
+      const previous = G[proposal.which];
+      G[proposal.which] = proposal.value;
+      const raised = LAW_LEVELS.indexOf(proposal.value) > LAW_LEVELS.indexOf(previous);
+      if (raised) {
+        for (const duke of Object.keys(G.favor)) {
+          if (!vote.votes[duke]) adjustFavor(G, duke, CONFIG.favor.onLawRaise,
+            `${proposal.which} raised to ${proposal.value}`);
+        }
+      } else {
+        for (const duke of Object.keys(G.favor)) {
+          adjustFavor(G, duke, CONFIG.favor.onLawLower,
+            `${proposal.which} lowered to ${proposal.value}`);
+        }
+      }
+      G.log.push(`Council passes: ${proposal.which} = ${proposal.value} (${yes}-${no}).`);
+    } else if (proposal.type === 'decree') {
+      G.enactedDecrees.push(proposal.cardId);
+      const holderIndex = G.players[G.crownHolder].hand
+        .findIndex((held) => held.uid === proposal.uid);
+      if (holderIndex >= 0) {
+        G.discard.push(G.players[G.crownHolder].hand.splice(holderIndex, 1)[0]);
+      }
+      G.log.push(`Council passes decree ${proposal.cardId} (${yes}-${no}).`);
+    }
+  } else {
+    G.log.push(`Council rejects ${proposal.type} proposal (${yes}-${no}).`);
+  }
+  G.pendingVote = null;
+}
+
+function proposeVote({ G, playerID }, proposal) {
+  if (!isKing(G, playerID) || G.pendingVote || (G.councilProposals || 0) >= 2) {
+    return INVALID_MOVE;
+  }
+  G.councilProposals = (G.councilProposals || 0) + 1;
+  G.pendingVote = { proposal, votes: {} };
+}
 
 function rebellionDukeOrder(G, ctx) {
   const playOrder = ctx?.playOrder?.length ? ctx.playOrder : Object.keys(G.players);
@@ -360,20 +427,45 @@ export function grantProvince(G, provinceId, requestedRecipient, reason = 'grant
 // PHASE 1 — COUNCIL (king proposes; laws voted; war declared; offices granted)
 // ---------------------------------------------------------------------------
 export const councilMoves = {
-  // King changes a law. Real rules require a council vote (§5); here it's a
-  // direct set with the favor consequence applied. TODO(vote): add voting.
-  setLaw({ G, playerID }, which, value) {
-    if (!isKing(G, playerID)) return INVALID_MOVE;
+  // §5: laws require a resolved Council vote. The proposal itself uses one of
+  // the King's two Council proposal slots; all seats vote openly afterward.
+  proposeLaw({ G, playerID }, which, value) {
     if (which !== 'taxLaw' && which !== 'levyLaw') return INVALID_MOVE;
-    const levels = ['low', 'medium', 'high'];
-    if (!levels.includes(value)) return INVALID_MOVE;
-    const raised = levels.indexOf(value) > levels.indexOf(G[which]);
-    G[which] = value;
-    // §5: raising angers dukes, lowering pleases them.
-    for (const duke of Object.keys(G.favor)) {
-      adjustFavor(G, duke, raised ? -1 : 1, `${which} -> ${value}`);
+    if (!LAW_LEVELS.includes(value) || value === G[which]) return INVALID_MOVE;
+    return proposeVote({ G, playerID }, { type: 'law', which, value });
+  },
+
+  // Kept as a named rejection so callers cannot accidentally retain the old
+  // direct-set path while migrating to proposeLaw/vote.
+  setLaw() {
+    return INVALID_MOVE;
+  },
+
+  // Decrees are consumed only after the crown-holder's Council proposal wins.
+  // M2d supplies the individual decree effects; this ticket owns their vote
+  // and the single resolved-decree record.
+  proposeDecree({ G, playerID }, uid) {
+    if (!isKing(G, playerID)) return INVALID_MOVE;
+    const held = G.players[playerID].hand.find((entry) => entry.uid === uid);
+    const definition = held && card(held.cardId);
+    if (!definition || definition.type !== 'decree') return INVALID_MOVE;
+    return proposeVote({ G, playerID }, {
+      type: 'decree', uid, cardId: held.cardId, effect: definition.effect,
+    });
+  },
+
+  vote({ G, playerID }, choice) {
+    if (!G.pendingVote || !(playerID in G.players) ||
+      (choice !== true && choice !== false && choice !== 'yes' && choice !== 'no')) {
+      return INVALID_MOVE;
     }
-    G.log.push(`King sets ${which} = ${value}.`);
+    if (Object.prototype.hasOwnProperty.call(G.pendingVote.votes, playerID)) {
+      return INVALID_MOVE;
+    }
+    G.pendingVote.votes[playerID] = choice === true || choice === 'yes';
+    if (Object.keys(G.pendingVote.votes).length === Object.keys(G.players).length) {
+      resolveCouncilVote(G);
+    }
   },
 
   // King grants a civilian office (scarcity enforced by grantableSeats).
@@ -404,8 +496,12 @@ export const councilMoves = {
     G.log.push(`King declares war on ${fk.name} (garrison ${fk.garrison}).`);
   },
 
+  // ADR-0004: cash paid during a vote is the only binding form of bribery.
+  transferGold,
+
   endCouncil({ G, playerID, events }) {
     if (!isKing(G, playerID)) return INVALID_MOVE;
+    if (G.pendingVote) return INVALID_MOVE;
     events.endPhase();
   },
 };
@@ -901,14 +997,7 @@ export const warMoves = {
   },
 
   // ADR-0004 / §7.7: binding cash transfers are immediate and unenforced.
-  transferGold({ G, playerID }, toSeat, amount) {
-    amount = amount | 0;
-    if (!(toSeat in G.players) || toSeat === playerID || amount <= 0) return INVALID_MOVE;
-    if (G.players[playerID].gold < amount) return INVALID_MOVE;
-    G.players[playerID].gold -= amount;
-    G.players[toSeat].gold += amount;
-    G.log.push(`Seat ${playerID} transfers ${amount}g to seat ${toSeat}.`);
-  },
+  transferGold,
 
   // §10: declaration opens an ordered side-picking and negotiation window.
   declareRebellion({ G, ctx, events, playerID }) {
@@ -1032,6 +1121,7 @@ export const harvestMoves = {
       G.finalScores = finalScores(G);
       G.log.push('Game over.');
     } else {
+      G.councilProposals = 0;
       G.log.push(`--- Year ${G.year} ---`);
     }
     events.endPhase(); // wraps to 'council' via phase.next

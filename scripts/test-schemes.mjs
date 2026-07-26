@@ -81,7 +81,7 @@ const rebellionGame = makeGame();
 rebellionGame.players['0'].troops = 5;
 rebellionGame.players['1'].troops = 5;
 playScheme(rebellionGame, '1', 'sch_ambush');
-rebellionGame.activeRebellion = { leader: '1' };
+rebellionGame.activeRebellion = { leader: '1', step: 'locked' };
 warMoves.resolveRebellion({ G: rebellionGame, playerID: '0' });
 assert(rebellionGame.crownHolder === '1', 'Ambush did not affect rebellion strength');
 

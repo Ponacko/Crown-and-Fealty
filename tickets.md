@@ -122,11 +122,11 @@ that precedes rebellion battle resolution. Design §10.
 
 **Blocked by:** M1
 
-- [ ] A duke can declare a rebellion at the start of Phase 4 (one per year, already enforced)
-- [ ] Going around the table from the rebel, each other duke declares Loyalist / Rebel / Neutral, stored in `G.activeRebellion.sides`
-- [ ] Negotiation window: the king may make binding offers (gold transferred immediately; promises are not enforced — Junta rule)
-- [ ] Each player may change their declaration once during the window, then it locks
-- [ ] Dukes can pick sides and renegotiate exactly once
+- [x] A duke can declare a rebellion at the start of Phase 4 (one per year, already enforced)
+- [x] Going around the table from the rebel, each other duke declares Loyalist / Rebel / Neutral, stored in `G.activeRebellion.sides`
+- [x] Negotiation window: the king may make binding offers (gold transferred immediately; promises are not enforced — Junta rule)
+- [x] Each player may change their declaration once during the window, then it locks
+- [x] Dukes can pick sides and renegotiate exactly once
 
 ## M4.2 — Rebellion: battle resolution
 

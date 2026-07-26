@@ -89,12 +89,17 @@ export const CrownAndFealty = {
     warAndRebellion: {
       // §5 Phase 4: all seats can set a secret war dial simultaneously; the
       // King reveals once every seat has committed. Rebellion sequencing is
-      // layered on by M4.
+      // layered on by M4: its moves replace activePlayers dynamically with
+      // one side-picker (plus the King during negotiation).
       next: 'harvest',
       turn: {
         activePlayers: { all: 'warCommit' },
         stages: {
           warCommit: { moves: warMoves },
+          rebellionSides: { moves: warMoves },
+          rebellionNegotiation: { moves: warMoves },
+          rebellionNegotiationKing: { moves: warMoves },
+          rebellionLocked: { moves: warMoves },
         },
       },
     },

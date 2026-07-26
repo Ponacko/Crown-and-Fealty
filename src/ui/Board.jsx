@@ -50,7 +50,9 @@ export function Board({ G, ctx, moves, playerID }) {
         <div>Tax law: {G.taxLaw} | Levy law: {G.levyLaw}</div>
         <div>Offices: {JSON.stringify(G.offices)}</div>
         <div>Pending war: {G.pendingWar ? G.pendingWar.kingdomId : '—'}</div>
-        <div>Rebellion: {G.activeRebellion ? `seat ${G.activeRebellion.leader}` : '—'}</div>
+        <div>Rebellion: {G.activeRebellion
+          ? `seat ${G.activeRebellion.leader} (${G.activeRebellion.step})`
+          : '—'}</div>
       </div>
 
       {/* --- Players --- */}
@@ -286,11 +288,38 @@ function PhaseControls({ phase, moves, G, me, isKing }) {
           {!isKing && <button style={btn} onClick={() => moves.transferGold(G.crownHolder, n)}>
             Cover king reparations ({n}g)
           </button>}
-          {!isKing && !G.activeRebellion &&
+          {isKing && G.activeRebellion?.step === 'negotiation' && <div>
+            <b>King&apos;s cash offers</b>
+            {Object.keys(G.favor).map((duke) => (
+              <button key={duke} style={btn} onClick={() => moves.transferGold(duke, n)}>
+                Offer {n}g → {duke}
+              </button>
+            ))}
+          </div>}
+          {G.activeRebellion?.step === 'sides' &&
+            G.activeRebellion.sideOrder[G.activeRebellion.sideIndex] === me && <div>
+              <b>Choose a side</b>
+              {['loyal', 'rebel', 'neutral'].map((side) => (
+                <button key={side} style={btn} onClick={() => moves.chooseRebellionSide(side)}>
+                  {side}
+                </button>
+              ))}
+            </div>}
+          {G.activeRebellion?.step === 'negotiation' &&
+            G.activeRebellion.sideOrder[G.activeRebellion.negotiationIndex] === me && <div>
+              <b>Renegotiate once</b>
+              {['loyal', 'rebel', 'neutral'].map((side) => (
+                <button key={side} style={btn} onClick={() => moves.renegotiateRebellion(side)}>
+                  Lock {side}
+                </button>
+              ))}
+            </div>}
+          {!isKing && !G.activeRebellion && !G.rebellionThisYear &&
             <button style={btn} onClick={() => moves.declareRebellion()}>⚔ DECLARE REBELLION</button>}
-          {isKing && G.activeRebellion &&
+          {isKing && G.activeRebellion?.step === 'locked' &&
             <button style={btn} onClick={() => moves.resolveRebellion()}>Resolve rebellion</button>}
-          {isKing && <button style={btn} onClick={() => moves.endWarPhase()}>END WAR PHASE ▶</button>}
+          {isKing && !G.activeRebellion &&
+            <button style={btn} onClick={() => moves.endWarPhase()}>END WAR PHASE ▶</button>}
         </div>
       );
 

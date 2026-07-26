@@ -78,7 +78,9 @@ export function setup({ ctx, random }) {
     pendingWar: null,      // {kingdomId} declared in Council, resolved in Phase 4
     pendingConquest: null, // {kingdomId, provinceIds} awaiting grant or sack
     pendingOccupation: null, // {kingdomId, provinceIds} awaiting defeat choice
-    activeRebellion: null, // {leader, sides:{seat:'loyal'|'rebel'|'neutral'}}
+    // §10: side declarations are ordered, then each duke gets one
+    // renegotiation before the sides lock for battle.
+    activeRebellion: null, // {leader, sides, sideOrder, sideIndex, step, renegotiated, negotiationIndex}
     casusBelli: {},        // {dukeSeat: count}
     rebellionThisYear: false,
     warLostThisYear: false,

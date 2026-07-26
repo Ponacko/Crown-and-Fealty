@@ -22,6 +22,16 @@ import {
 
 const isKing = (G, playerID) => playerID === G.crownHolder;
 const card = (cardId) => CARDS.find((c) => c.id === cardId);
+const REBELLION_SIDES = ['loyal', 'rebel', 'neutral'];
+
+function rebellionDukeOrder(G, ctx) {
+  const playOrder = ctx?.playOrder?.length ? ctx.playOrder : Object.keys(G.players);
+  return playOrder.filter((seat) => seat in G.favor);
+}
+
+function setRebellionStage(events, activePlayers) {
+  if (events?.setActivePlayers) events.setActivePlayers({ value: activePlayers });
+}
 
 export function hasCharacter(G, seat, effect) {
   return G.players[seat].characters.some((cardId) => {
@@ -705,22 +715,89 @@ export const warMoves = {
     G.log.push(`Seat ${playerID} transfers ${amount}g to seat ${toSeat}.`);
   },
 
-  // A duke declares rebellion. SIMPLIFIED (§10): total troops per side, no
-  // side-picking negotiation yet. TODO: implement loyalist/rebel/neutral
-  // declarations, binding offers, castle bonuses, marshal bonus.
-  declareRebellion({ G, playerID }) {
+  // §10: declaration opens an ordered side-picking and negotiation window.
+  declareRebellion({ G, ctx, events, playerID }) {
     if (isKing(G, playerID)) return INVALID_MOVE;
-    if (G.activeRebellion) return INVALID_MOVE;
-    G.activeRebellion = { leader: playerID };
+    if (G.activeRebellion || G.rebellionThisYear) return INVALID_MOVE;
+    if (G.pendingWar || G.pendingConquest || G.pendingOccupation) return INVALID_MOVE;
+    const dukes = rebellionDukeOrder(G, ctx);
+    const leaderIndex = dukes.indexOf(playerID);
+    if (leaderIndex < 0) return INVALID_MOVE;
+    const sideOrder = dukes.slice(leaderIndex + 1).concat(dukes.slice(0, leaderIndex));
+    G.activeRebellion = {
+      leader: playerID,
+      sides: {},
+      sideOrder,
+      sideIndex: 0,
+      step: sideOrder.length ? 'sides' : 'locked',
+      renegotiated: {},
+      negotiationIndex: 0,
+    };
     G.rebellionThisYear = true;
     resolveSchemes(G, 'rebellionDeclared');
     G.log.push(`Seat ${playerID} raises the banner of rebellion!`);
+    if (sideOrder.length) {
+      setRebellionStage(events, { [sideOrder[0]]: 'rebellionSides' });
+    } else {
+      setRebellionStage(events, { [G.crownHolder]: 'rebellionLocked' });
+    }
   },
 
-  // Resolve rebellion. SIMPLIFIED: rebel leader's troops vs king's troops.
+  // §10: every other duke declares once, clockwise from the rebel.
+  chooseRebellionSide({ G, events, playerID }, side) {
+    const rebellion = G.activeRebellion;
+    if (!rebellion || rebellion.step !== 'sides' || !REBELLION_SIDES.includes(side)) {
+      return INVALID_MOVE;
+    }
+    if (rebellion.sideOrder[rebellion.sideIndex] !== playerID) return INVALID_MOVE;
+    rebellion.sides[playerID] = side;
+    rebellion.sideIndex += 1;
+    G.log.push(`Seat ${playerID} declares ${side} in the rebellion.`);
+    if (rebellion.sideIndex === rebellion.sideOrder.length) {
+      rebellion.step = 'negotiation';
+      rebellion.negotiationIndex = 0;
+      G.log.push('Rebellion negotiation opens; each duke may switch sides once.');
+      setRebellionStage(events, {
+        [rebellion.sideOrder[0]]: 'rebellionNegotiation',
+        [G.crownHolder]: 'rebellionNegotiationKing',
+      });
+    } else {
+      setRebellionStage(events, {
+        [rebellion.sideOrder[rebellion.sideIndex]]: 'rebellionSides',
+      });
+    }
+  },
+
+  // §10 / ADR-0004: one renegotiation pass, with cash-now offers handled by
+  // transferGold. Once a duke acts here, that duke's declaration is locked.
+  renegotiateRebellion({ G, events, playerID }, side) {
+    const rebellion = G.activeRebellion;
+    if (!rebellion || rebellion.step !== 'negotiation' || !REBELLION_SIDES.includes(side)) {
+      return INVALID_MOVE;
+    }
+    if (rebellion.sideOrder[rebellion.negotiationIndex] !== playerID ||
+      rebellion.renegotiated[playerID]) return INVALID_MOVE;
+    rebellion.sides[playerID] = side;
+    rebellion.renegotiated[playerID] = true;
+    rebellion.negotiationIndex += 1;
+    G.log.push(`Seat ${playerID} locks ${side} after renegotiation.`);
+    if (rebellion.negotiationIndex === rebellion.sideOrder.length) {
+      rebellion.step = 'locked';
+      G.log.push('Rebellion sides locked; the battle may now resolve.');
+      setRebellionStage(events, { [G.crownHolder]: 'rebellionLocked' });
+    } else {
+      setRebellionStage(events, {
+        [rebellion.sideOrder[rebellion.negotiationIndex]]: 'rebellionNegotiation',
+        [G.crownHolder]: 'rebellionNegotiationKing',
+      });
+    }
+  },
+
+  // Resolve rebellion. M4.2 will expand the locked sides into coalitions.
   resolveRebellion({ G, playerID }) {
     if (!isKing(G, playerID)) return INVALID_MOVE;
     if (!G.activeRebellion) return INVALID_MOVE;
+    if (G.activeRebellion.step && G.activeRebellion.step !== 'locked') return INVALID_MOVE;
     const rebel = G.activeRebellion.leader;
     const P = CONFIG.prestige;
     const revealed = resolveSchemes(G, 'rebellionBattle');
@@ -759,7 +836,7 @@ export const warMoves = {
 
   endWarPhase({ G, playerID, events }) {
     if (!isKing(G, playerID)) return INVALID_MOVE;
-    if (G.pendingWar || G.pendingConquest || G.pendingOccupation ||
+    if (G.activeRebellion || G.pendingWar || G.pendingConquest || G.pendingOccupation ||
       provinceCount(G, G.crownHolder) > CONFIG.domainLimit) return INVALID_MOVE;
     events.endPhase();
   },

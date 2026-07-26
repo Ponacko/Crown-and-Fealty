@@ -58,7 +58,7 @@ function claimOn(G, provinceId) {
 // and is discarded; a bluffed non-Scheme is revealed as a dud at a battle.
 // The returned bonuses keep the trigger-specific rules out of the battle
 // reducers while leaving the hidden card identity in player.schemes until now.
-export function resolveSchemes(G, trigger, details = {}) {
+export function resolveSchemes(G, trigger) {
   const result = {
     attackBonus: 0,
     attackBonusBySeat: {},
@@ -94,7 +94,7 @@ export function resolveSchemes(G, trigger, details = {}) {
           }
         }
       } else if (trigger === 'rebellionDeclared') {
-        resolves = effect === 'forgedLetters';
+        resolves = isBluff || effect === 'forgedLetters';
         if (effect === 'forgedLetters') {
           const target = scheme.targetSeat && scheme.targetSeat !== seat
             ? scheme.targetSeat
@@ -105,7 +105,7 @@ export function resolveSchemes(G, trigger, details = {}) {
           }
         }
       } else if (trigger === 'rebellionBattle') {
-        resolves = effect === 'ambush';
+        resolves = isBluff || effect === 'ambush';
         if (effect === 'ambush') {
           result.attackBonusBySeat[seat] =
             (result.attackBonusBySeat[seat] || 0) + CONFIG.cards.ambushStrength;
@@ -346,7 +346,7 @@ export const actionMoves = {
     const def = card(held.cardId);
     if (!def) return INVALID_MOVE;
   const bluff = args[0] && typeof args[0] === 'object' && args[0].faceDown;
-  if (def.crownOnly && !isKing(G, playerID) && !bluff) {
+  if (def.crownOnly && !isKing(G, playerID)) {
       // A duke may hold crown-only cards (bank for a coup) but not play them.
       return INVALID_MOVE;
     }

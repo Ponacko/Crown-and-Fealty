@@ -92,4 +92,15 @@ assert(bluffGame.players['1'].schemes.length === 0, 'bluff was not consumed');
 assert(bluffGame.discard.some((held) => held.cardId === 'act_taxfarmers'),
   'bluff dud was not discarded');
 
+// Crown-only cards remain unplayable by dukes even when the caller requests a
+// face-down bluff.
+const crownBluffGame = makeGame();
+const crownBluffUid = `${'act_tourney'}_bluff_test`;
+crownBluffGame.players['1'].hand.push({ uid: crownBluffUid, cardId: 'act_tourney' });
+crownBluffGame.players['1'].actionsLeft = 1;
+assert(actionMoves.playCard(context(crownBluffGame, '1'), crownBluffUid, { faceDown: true }) === INVALID_MOVE,
+  'duke played a crown-only bluff');
+assert(crownBluffGame.players['1'].hand.some((held) => held.uid === crownBluffUid),
+  'rejected crown-only bluff left the hand');
+
 console.log('PASS: M2c scheme checks.');

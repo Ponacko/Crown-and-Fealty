@@ -36,12 +36,12 @@ rules code.
 
 **Stubbed, with `TODO(...)` markers in code — your vibecoding targets:**
 - `setup.js` → **auction the crown** (currently seat 0 is just king).
-- `moves.js` (council) → decree effects and Revocation; Council law voting is wired.
+- `moves.js` (council) → Revocation; Council law/decree voting is wired.
 - `moves.js` (draft) → **Inis-style pick-and-pass** (currently a straight deal).
 - `moves.js` (war) → **levy-duty calc, conquest distribution honoring Domain Limit, border occupation on loss, reparations borrowing**.
 - `moves.js` (rebellion) → **side-picking (loyalist/rebel/neutral), binding offers, castle/marshal/scheme bonuses, land stripping**.
-- `moves.js` (cards) → Schemes resolve in M2c and Decrees in M2d; the Action,
-  Character, and Claim cards from M2b are wired through `playCard`.
+- `moves.js` (cards) → Schemes resolve in M2c; the Action, Character, Claim, and
+  Decree cards from M2b/M2d are wired through their phase-specific seams.
 - `game.js` → **`playerView`** to redact hidden info for networked play.
 
 ## Codebase map

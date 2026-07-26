@@ -111,6 +111,12 @@ export const CONFIG = {
     forgedLettersFavor: -2,
   },
 
+  // ---- Decrees (§9) ------------------------------------------------------
+  decrees: {
+    standingArmyDomainBonus: 1,
+    trialByCombatBonus: 2,
+  },
+
   // ---- War (§7) ----------------------------------------------------------
   casualties: {
     winPerN: 4,   // lose 1 cube per N committed on the winning side

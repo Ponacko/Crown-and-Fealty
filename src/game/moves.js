@@ -40,6 +40,19 @@ function voteWeight(G, seat) {
   return G.offices.chancellor === seat ? CONFIG.chancellorVoteWeight : 1;
 }
 
+function enactedDecreeCount(G, effect) {
+  return (G.enactedDecrees || []).filter((cardId) => card(cardId)?.effect === effect).length;
+}
+
+export function kingDomainLimit(G) {
+  return CONFIG.domainLimit + enactedDecreeCount(G, 'standingArmy') *
+    CONFIG.decrees.standingArmyDomainBonus;
+}
+
+function hasEnactedDecree(G, effect) {
+  return enactedDecreeCount(G, effect) > 0;
+}
+
 function resolveCouncilVote(G) {
   const vote = G.pendingVote;
   const proposal = vote.proposal;
@@ -70,10 +83,12 @@ function resolveCouncilVote(G) {
       G.log.push(`Council passes: ${proposal.which} = ${proposal.value} (${yes}-${no}).`);
     } else if (proposal.type === 'decree') {
       G.enactedDecrees.push(proposal.cardId);
-      const holderIndex = G.players[G.crownHolder].hand
-        .findIndex((held) => held.uid === proposal.uid);
+      const holder = G.players[proposal.holderSeat];
+      const holderIndex = holder
+        ? holder.hand.findIndex((held) => held.uid === proposal.uid)
+        : -1;
       if (holderIndex >= 0) {
-        G.discard.push(G.players[G.crownHolder].hand.splice(holderIndex, 1)[0]);
+        G.discard.push(holder.hand.splice(holderIndex, 1)[0]);
       }
       G.log.push(`Council passes decree ${proposal.cardId} (${yes}-${no}).`);
     }
@@ -160,7 +175,7 @@ function stripProvinces(G, seat, count) {
 function assignStrippedProvince(G, provinceId, recipient) {
   const province = G.provinces[provinceId];
   if (!province || !(recipient in G.players)) return false;
-  if (recipient === G.crownHolder && provinceCount(G, recipient) >= CONFIG.domainLimit) {
+  if (recipient === G.crownHolder && provinceCount(G, recipient) >= kingDomainLimit(G)) {
     return false;
   }
   province.owner = recipient;
@@ -242,11 +257,11 @@ function applyRebelVictory(G, rebellion) {
   G.crownHolder = rebel;
   G.offices.marshal = rebel;
   const rebelDukes = rebelSeats.filter((seat) => seat !== rebel);
-  stripped.push(...stripProvinces(G, rebel,
-    Math.max(0, provinceCount(G, rebel) - CONFIG.domainLimit)));
+  const rebelExcess = Math.max(0, provinceCount(G, rebel) - kingDomainLimit(G));
+  stripped.push(...stripProvinces(G, rebel, rebelExcess));
   distributable = rebelDukes.length
     ? Infinity
-    : Math.max(0, CONFIG.domainLimit - provinceCount(G, rebel));
+    : Math.max(0, kingDomainLimit(G) - provinceCount(G, rebel));
   const oldKingExcess = Math.max(0, Object.values(G.provinces)
     .filter((province) => province.owner === oldKing && !province.capital).length - 3);
   const trimmedOldKing = stripProvinces(G, oldKing, oldKingExcess);
@@ -437,19 +452,30 @@ export const councilMoves = {
   proposeLaw({ G, playerID }, which, value) {
     if (which !== 'taxLaw' && which !== 'levyLaw') return INVALID_MOVE;
     if (!LAW_LEVELS.includes(value) || value === G[which]) return INVALID_MOVE;
+    // §9: Magna Carta makes High Tax unavailable after enactment.
+    if (which === 'taxLaw' && value === 'high' && hasEnactedDecree(G, 'magnaCarta')) {
+      return INVALID_MOVE;
+    }
     return proposeVote({ G, playerID }, { type: 'law', which, value });
   },
 
-  // Decrees are consumed only after the crown-holder's Council proposal wins.
-  // M2d supplies the individual decree effects; this ticket owns their vote
-  // and the single resolved-decree record.
+  // Decrees are consumed only after the crown-holder's Council proposal wins;
+  // their effects are read from the enacted-decree record by the relevant rule.
   proposeDecree({ G, playerID }, uid) {
     if (!isKing(G, playerID)) return INVALID_MOVE;
-    const held = G.players[playerID].hand.find((entry) => entry.uid === uid);
+    const holderEntry = Object.entries(G.players)
+      .map(([seat, player]) => ({
+        seat,
+        held: player.hand.find((entry) => entry.uid === uid),
+      }))
+      .find(({ held }) => held);
+    const held = holderEntry?.held;
     const definition = held && card(held.cardId);
     if (!definition || definition.type !== 'decree') return INVALID_MOVE;
+    if (definition.effect === 'magnaCarta' && G.taxLaw === 'high') return INVALID_MOVE;
     return proposeVote({ G, playerID }, {
-      type: 'decree', uid, cardId: held.cardId, effect: definition.effect,
+      type: 'decree', uid, holderSeat: holderEntry.seat,
+      cardId: held.cardId, effect: definition.effect,
     });
   },
 
@@ -843,7 +869,7 @@ function materializeConqueredProvinces(G, kingdom) {
     provinceIds.push(foreign.id);
   }
 
-  const keepable = Math.max(0, CONFIG.domainLimit - before);
+  const keepable = Math.max(0, kingDomainLimit(G) - before);
   const surplus = provinceIds.slice(keepable);
   for (const provinceId of surplus) G.provinces[provinceId].owner = null;
   return surplus.length ? { kingdomId: kingdom.id, provinceIds: surplus } : null;
@@ -1085,9 +1111,18 @@ export const warMoves = {
     if (!G.activeRebellion) return INVALID_MOVE;
     if (G.activeRebellion.step && G.activeRebellion.step !== 'locked') return INVALID_MOVE;
     const revealed = resolveSchemes(G, 'rebellionBattle');
-    const strength = rebellionBattleStrength(G, revealed);
-    const rebelForce = strength.rebels;
-    const kingForce = strength.king;
+    const rawStrength = rebellionBattleStrength(G, revealed);
+    let rebelForce = rawStrength.rebels;
+    let kingForce = rawStrength.king;
+    if (hasEnactedDecree(G, 'trialByCombat')) {
+      if (rebelForce < kingForce) {
+        rebelForce += CONFIG.decrees.trialByCombatBonus;
+        G.log.push(`Trial by Combat: rebels gain +${CONFIG.decrees.trialByCombatBonus}.`);
+      } else if (kingForce < rebelForce) {
+        kingForce += CONFIG.decrees.trialByCombatBonus;
+        G.log.push(`Trial by Combat: King gains +${CONFIG.decrees.trialByCombatBonus}.`);
+      }
+    }
     G.log.push(`REBELLION STRENGTH: rebels ${rebelForce}, king ${kingForce}.`);
 
     if (rebelForce > kingForce) {
@@ -1102,7 +1137,7 @@ export const warMoves = {
   endWarPhase({ G, playerID, events }) {
     if (!isKing(G, playerID)) return INVALID_MOVE;
     if (G.activeRebellion || G.pendingWar || G.pendingConquest || G.pendingOccupation ||
-      provinceCount(G, G.crownHolder) > CONFIG.domainLimit) return INVALID_MOVE;
+      provinceCount(G, G.crownHolder) > kingDomainLimit(G)) return INVALID_MOVE;
     events.endPhase();
   },
 };

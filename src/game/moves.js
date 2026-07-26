@@ -518,6 +518,41 @@ function warAttackStrength(G, commits, schemeBonus) {
   return attack;
 }
 
+function materializeConqueredProvinces(G, kingdom) {
+  const before = provinceCount(G, G.crownHolder);
+  const provinceIds = [];
+  for (const foreign of kingdom.provinces) {
+    if (G.provinces[foreign.id]) continue;
+    G.provinces[foreign.id] = {
+      ...foreign,
+      name: `${kingdom.name} — ${foreign.id}`,
+      region: 'foreign',
+      foreignKingdomId: kingdom.id,
+      owner: G.crownHolder,
+      building: null,
+      faceUp: true,
+    };
+    provinceIds.push(foreign.id);
+  }
+
+  const keepable = Math.max(0, CONFIG.domainLimit - before);
+  const surplus = provinceIds.slice(keepable);
+  for (const provinceId of surplus) G.provinces[provinceId].owner = null;
+  return surplus.length ? { kingdomId: kingdom.id, provinceIds: surplus } : null;
+}
+
+function removeConquestObligation(G, provinceId) {
+  G.pendingConquest.provinceIds = G.pendingConquest.provinceIds
+    .filter((id) => id !== provinceId);
+  if (G.pendingConquest.provinceIds.length === 0) G.pendingConquest = null;
+}
+
+function occupationCandidates(G) {
+  return Object.values(G.provinces)
+    .filter((province) => province.owner === G.crownHolder && !province.capital && province.faceUp)
+    .map((province) => province.id);
+}
+
 // Resolve the external war. Winner distribution and defeat consequences are
 // handled by M3.2; this seam owns duty, strength, modifier, and casualties.
 function resolveExternalWar({ G, playerID, random }, modifierIndex) {
@@ -551,6 +586,8 @@ function resolveExternalWar({ G, playerID, random }, modifierIndex) {
       }
     }
     G.log.push(`WAR WON vs ${fk.name} (${attack} > ${defense}).`);
+    G.pendingConquest = materializeConqueredProvinces(G, fk);
+    G.pendingOccupation = null;
     // TODO(distribution §7.6): honor domainLimit, grant surplus to dukes
     // (+2 favor each), sack undistributable provinces (-1 favor all).
   } else {
@@ -561,6 +598,11 @@ function resolveExternalWar({ G, playerID, random }, modifierIndex) {
       adjustFavor(G, duke, CONFIG.favor.onKingWarLoss, 'king lost a war');
     }
     G.log.push(`WAR LOST vs ${fk.name} (${attack} <= ${defense}).`);
+    G.pendingConquest = null;
+    const provinceIds = occupationCandidates(G);
+    G.pendingOccupation = provinceIds.length
+      ? { kingdomId: fk.id, provinceIds }
+      : null;
     // TODO(§7.7): occupy one border province of the king's choice.
   }
 
@@ -605,6 +647,50 @@ export const warMoves = {
   // revealWar so incomplete dials cannot resolve.
   resolveWar(context, modifierIndex) {
     return resolveExternalWar(context, modifierIndex);
+  },
+
+  grantConquest({ G, playerID }, provinceId, recipient) {
+    if (!isKing(G, playerID) || !G.pendingConquest) return INVALID_MOVE;
+    if (!G.pendingConquest.provinceIds.includes(provinceId)) return INVALID_MOVE;
+    if (!(recipient in G.favor)) return INVALID_MOVE;
+    if (!grantProvince(G, provinceId, recipient, 'war conquest')) return INVALID_MOVE;
+    removeConquestObligation(G, provinceId);
+    G.log.push(`King grants conquered province ${provinceId} to seat ${recipient}.`);
+  },
+
+  sackConquest({ G, playerID }, provinceId) {
+    if (!isKing(G, playerID) || !G.pendingConquest) return INVALID_MOVE;
+    if (!G.pendingConquest.provinceIds.includes(provinceId)) return INVALID_MOVE;
+    delete G.provinces[provinceId];
+    for (const player of Object.values(G.players)) {
+      player.claims = player.claims.filter((claim) => claim.provinceId !== provinceId);
+    }
+    for (const duke of Object.keys(G.favor)) {
+      adjustFavor(G, duke, CONFIG.favor.onSackProvince, `sacked ${provinceId}`);
+    }
+    removeConquestObligation(G, provinceId);
+    G.log.push(`King sacks conquered province ${provinceId}.`);
+  },
+
+  occupyProvince({ G, playerID }, provinceId) {
+    if (!isKing(G, playerID) || !G.pendingOccupation) return INVALID_MOVE;
+    if (!G.pendingOccupation.provinceIds.includes(provinceId)) return INVALID_MOVE;
+    const province = G.provinces[provinceId];
+    if (!province || province.owner !== G.crownHolder) return INVALID_MOVE;
+    province.owner = null;
+    province.faceUp = false;
+    province.occupiedBy = G.pendingOccupation.kingdomId;
+    G.pendingOccupation = null;
+    G.log.push(`The enemy occupies ${province.name}.`);
+  },
+
+  transferGold({ G, playerID }, toSeat, amount) {
+    amount = amount | 0;
+    if (!(toSeat in G.players) || toSeat === playerID || amount <= 0) return INVALID_MOVE;
+    if (G.players[playerID].gold < amount) return INVALID_MOVE;
+    G.players[playerID].gold -= amount;
+    G.players[toSeat].gold += amount;
+    G.log.push(`Seat ${playerID} transfers ${amount}g to seat ${toSeat}.`);
   },
 
   // A duke declares rebellion. SIMPLIFIED (§10): total troops per side, no
@@ -661,7 +747,8 @@ export const warMoves = {
 
   endWarPhase({ G, playerID, events }) {
     if (!isKing(G, playerID)) return INVALID_MOVE;
-    if (G.pendingWar) return INVALID_MOVE;
+    if (G.pendingWar || G.pendingConquest || G.pendingOccupation ||
+      provinceCount(G, G.crownHolder) > CONFIG.domainLimit) return INVALID_MOVE;
     events.endPhase();
   },
 };

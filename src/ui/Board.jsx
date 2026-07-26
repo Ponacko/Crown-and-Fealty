@@ -259,6 +259,30 @@ function PhaseControls({ phase, moves, G, me, isKing }) {
             <button style={btn} onClick={() => moves.commitTroops(n)}>Commit troops</button>
             {isKing && <button style={btn} onClick={() => moves.revealWar()}>Reveal dials &amp; resolve war</button>}
           </div>}
+          {G.pendingConquest && isKing && <div>
+            <b>Distribute conquered provinces</b>
+            {G.pendingConquest.provinceIds.map((provinceId) => (
+              <div key={provinceId}>
+                {G.provinces[provinceId]?.name || provinceId}
+                {Object.keys(G.favor).map((duke) => (
+                  <button key={`${provinceId}-${duke}`} style={btn}
+                    onClick={() => moves.grantConquest(provinceId, duke)}>
+                    Grant → {duke}
+                  </button>
+                ))}
+                <button style={btn} onClick={() => moves.sackConquest(provinceId)}>Sack</button>
+              </div>
+            ))}
+          </div>}
+          {G.pendingOccupation && isKing && <div>
+            <b>Choose the occupied province</b>
+            {G.pendingOccupation.provinceIds.map((provinceId) => (
+              <button key={provinceId} style={btn}
+                onClick={() => moves.occupyProvince(provinceId)}>
+                Occupy {G.provinces[provinceId]?.name || provinceId}
+              </button>
+            ))}
+          </div>}
           {!isKing && !G.activeRebellion &&
             <button style={btn} onClick={() => moves.declareRebellion()}>⚔ DECLARE REBELLION</button>}
           {isKing && G.activeRebellion &&

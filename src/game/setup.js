@@ -76,6 +76,8 @@ export function setup({ ctx, random }) {
     })),
     // Pending / active flags used across phases
     pendingWar: null,      // {kingdomId} declared in Council, resolved in Phase 4
+    pendingConquest: null, // {kingdomId, provinceIds} awaiting grant or sack
+    pendingOccupation: null, // {kingdomId, provinceIds} awaiting defeat choice
     activeRebellion: null, // {leader, sides:{seat:'loyal'|'rebel'|'neutral'}}
     casusBelli: {},        // {dukeSeat: count}
     rebellionThisYear: false,

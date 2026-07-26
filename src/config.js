@@ -40,6 +40,7 @@ export const CONFIG = {
     onRevoke: -2,
     onKingWarLoss: -1,      // applied to EVERY duke when the king loses a war
     onGrantClaimedToOther: -1,
+    onSackProvince: -1,
     onStripOffice: -2,
     devotedThreshold: 3,    // +1 str per 3 cubes fighting for king at this favor
     furiousThreshold: -3,   // grants king a permanent casus belli

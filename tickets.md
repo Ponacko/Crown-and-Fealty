@@ -109,11 +109,11 @@ both branches. Design §7.6–§7.7.
 
 **Blocked by:** M3.1
 
-- [ ] Victory: king keeps up to `CONFIG.domainLimit` provinces (Capital counts); surplus must be granted to dukes (+2 favor each) before the phase ends; any province the king can't keep and won't grant is sacked (removed, −1 favor with everyone)
-- [ ] The phase cannot end while the king is over Domain Limit
-- [ ] Defeat: double casualties on the losing side; king pays `CONFIG.warReparationsGold`, borrowing from dukes if short (a simple prompt/loan record); enemy occupies 1 border province of the king's choice (`faceUp=false`); king −2 prestige, −1 favor with every duke; `warLostThisYear` set
-- [ ] A won war forces legal distribution and cannot be left over-limit
-- [ ] A lost war applies all penalties and occupies a province
+- [x] Victory: king keeps up to `CONFIG.domainLimit` provinces (Capital counts); surplus must be granted to dukes (+2 favor each) before the phase ends; any province the king can't keep and won't grant is sacked (removed, −1 favor with everyone)
+- [x] The phase cannot end while the king is over Domain Limit
+- [x] Defeat: double casualties on the losing side; king pays `CONFIG.warReparationsGold`, borrowing from dukes if short (a simple prompt/loan record); enemy occupies 1 border province of the king's choice (`faceUp=false`); king −2 prestige, −1 favor with every duke; `warLostThisYear` set
+- [x] A won war forces legal distribution and cannot be left over-limit
+- [x] A lost war applies all penalties and occupies a province
 
 ## M4.1 — Rebellion: side-picking & negotiation
 

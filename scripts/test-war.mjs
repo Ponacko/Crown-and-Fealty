@@ -2,6 +2,7 @@
 // duty branding, scheme/character/Marshal bonuses, and casualties.
 import { setup } from '../src/game/setup.js';
 import { CONFIG } from '../src/config.js';
+import { CrownAndFealty } from '../src/game/game.js';
 import { warMoves, levyDuty } from '../src/game/moves.js';
 
 const INVALID_MOVE = 'INVALID_MOVE';
@@ -59,6 +60,8 @@ commitAll(allInGame, { '0': 0, '1': 1, '2': 0, '3': 0 });
 warMoves.revealWar(context(allInGame, '0'), 1);
 assert(allInGame.favor['1'] === 0, 'all-in commitment was incorrectly branded');
 assert(!allInGame.casusBelli['1'], 'all-in commitment incorrectly created Casus Belli');
+assert(allInGame.players['1'].prestige === CONFIG.prestige.warWinDutifulDuke,
+  'all-in dutiful duke did not receive victory Prestige');
 
 // Exceeding duty earns one Favor, while reveal is blocked until every seat
 // has supplied a dial.
@@ -73,6 +76,17 @@ commitAll(revealGame, { '0': 0, '1': 4, '2': 0, '3': 0 });
 warMoves.revealWar(context(revealGame, '0'), 1);
 assert(revealGame.favor['1'] === CONFIG.favor.onExceedLevy,
   'exceeding duty did not grant Favor');
+
+// Before reveal, a player view exposes only that seat's own dial.
+const hiddenGame = makeGame();
+startWar(hiddenGame);
+hiddenGame.players['1'].troops = 4;
+warMoves.commitTroops(context(hiddenGame, '1'), 4);
+const hiddenView = CrownAndFealty.playerView({ G: hiddenGame, playerID: '1' });
+assert(hiddenView.pendingWar.commits['1'] === 4, 'own war dial was hidden');
+assert(!Object.prototype.hasOwnProperty.call(hiddenView.pendingWar.commits, '0'),
+  'another player\'s war dial leaked');
+assert(hiddenView.players['0'].committed === null, 'another player\'s dial leaked through player state');
 
 // Marshal +2, General +1, and Ambush +3 can turn a losing commitment into a
 // victory; five committed cubes lose one cube on a winning battle.

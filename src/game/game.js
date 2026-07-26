@@ -91,7 +91,12 @@ export const CrownAndFealty = {
       // King reveals once every seat has committed. Rebellion sequencing is
       // layered on by M4.
       next: 'harvest',
-      moves: warMoves,
+      turn: {
+        activePlayers: { all: 'warCommit' },
+        stages: {
+          warCommit: { moves: warMoves },
+        },
+      },
     },
     harvest: {
       // Automatic; only the crown-holder advances (endHarvest).
@@ -114,8 +119,28 @@ export const CrownAndFealty = {
     }
   },
 
-  // Multiplayer hidden info (only meaningful across networked clients).
-  // In local/hotseat play everything is visible. TODO: redact other players'
-  // hands, gold, and face-down schemes for networked playtests.
-  playerView: ({ G, playerID }) => G,
+  // Multiplayer hidden info. M3.1's war dials are private until reveal;
+  // M7 will extend this redaction to hands, treasuries, and face-down schemes.
+  playerView: ({ G, playerID }) => {
+    if (playerID == null || !G.pendingWar || G.pendingWar.revealed) return G;
+    const visibleCommits = Object.prototype.hasOwnProperty.call(
+      G.pendingWar.commits, playerID
+    ) ? { [playerID]: G.pendingWar.commits[playerID] } : {};
+    const visibleAvailable = Object.prototype.hasOwnProperty.call(
+      G.pendingWar.availableTroops || {}, playerID
+    ) ? { [playerID]: G.pendingWar.availableTroops[playerID] } : {};
+    const players = Object.fromEntries(Object.entries(G.players).map(([seat, player]) => [
+      seat,
+      seat === playerID ? player : { ...player, committed: null },
+    ]));
+    return {
+      ...G,
+      players,
+      pendingWar: {
+        ...G.pendingWar,
+        commits: visibleCommits,
+        availableTroops: visibleAvailable,
+      },
+    };
+  },
 };

@@ -487,12 +487,17 @@ export const actionMoves = {
 // ---------------------------------------------------------------------------
 // PHASE 4 — WAR & REBELLION
 // ---------------------------------------------------------------------------
+// §7.2–§7.3: score each Duke's revealed dial against levy duty. ADR-0003
+// makes an all-in dial dutiful even when duty exceeds the available cubes.
 function evaluateLevyCommitments(G) {
+  G.pendingWar.dutiful ??= {};
   for (const duke of Object.keys(G.favor)) {
     const committed = G.pendingWar.commits[duke] || 0;
     const available = G.pendingWar.availableTroops?.[duke] ?? G.players[duke].troops;
     const duty = levyDuty(G, duke);
-    if (committed < duty && committed < available) {
+    const dutiful = committed >= duty || committed === available;
+    G.pendingWar.dutiful[duke] = dutiful;
+    if (committed < duty && !dutiful) {
       adjustFavor(G, duke, CONFIG.favor.onUnderCommitLevy, 'under-commit');
       G.casusBelli[duke] = (G.casusBelli[duke] || 0) + 1;
       G.log.push(`Seat ${duke} under-commits levy duty (${committed}/${duty}); Casus Belli placed.`);
@@ -521,7 +526,6 @@ function resolveExternalWar({ G, playerID, random }, modifierIndex) {
   if (!G.pendingWar.revealed) return INVALID_MOVE;
   const fk = G.foreignKingdoms.find((k) => k.id === G.pendingWar.kingdomId);
   if (!fk || fk.conquered) return INVALID_MOVE;
-  const dialCommits = { ...G.pendingWar.commits };
   evaluateLevyCommitments(G);
   const revealed = resolveSchemes(G, 'externalWar');
   const committed = Object.values(G.pendingWar.commits).reduce((a, b) => a + b, 0);
@@ -539,10 +543,10 @@ function resolveExternalWar({ G, playerID, random }, modifierIndex) {
   if (attack > defense) {
     fk.conquered = true;
     G.players[G.crownHolder].prestige += P.warWinKing;
-    // Duty branding and Casus Belli were applied before resolution. Prestige
-    // also uses the original revealed dial, before Bribed Captains desertions.
+    // Duty branding and Casus Belli were applied before resolution, including
+    // the all-in exception from ADR-0003.
     for (const duke of Object.keys(G.favor)) {
-      if ((dialCommits[duke] || 0) >= levyDuty(G, duke)) {
+      if (G.pendingWar.dutiful?.[duke]) {
         G.players[duke].prestige += P.warWinDutifulDuke;
       }
     }

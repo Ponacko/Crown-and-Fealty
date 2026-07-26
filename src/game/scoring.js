@@ -20,6 +20,10 @@ export function clampFavor(v) {
 
 export function adjustFavor(G, dukeSeat, delta, reason) {
   if (!(dukeSeat in G.favor)) return;
+  if (delta > 0 && G.players[dukeSeat].rebelCooldownUntilYear >= G.year) {
+    G.log.push(`Favor ${dukeSeat} remains at ${G.favor[dukeSeat]} during rebel cooldown.`);
+    return;
+  }
   const before = G.favor[dukeSeat];
   G.favor[dukeSeat] = clampFavor(before + delta);
   G.log.push(
@@ -91,6 +95,12 @@ export function runHarvest(G) {
   // 6) Reset yearly flags, thaw rebel cooldowns.
   G.rebellionThisYear = false;
   G.warLostThisYear = false;
+  for (const [seat, player] of Object.entries(G.players)) {
+    if (player.rebelCooldownUntilYear && player.rebelCooldownUntilYear <= G.year) {
+      player.rebelCooldownUntilYear = 0;
+      G.log.push(`Seat ${seat}'s rebellion cooldown thaws.`);
+    }
+  }
 
   // Diplomatic Envoy lasts for the current year only (§9).
   for (const kingdom of G.foreignKingdoms) {

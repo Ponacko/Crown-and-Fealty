@@ -66,6 +66,167 @@ function rebellionBattleStrength(G, revealed) {
   return totals;
 }
 
+function clearProvinceClaims(G, provinceId) {
+  for (const player of Object.values(G.players)) {
+    player.claims = player.claims.filter((claim) => claim.provinceId !== provinceId);
+  }
+}
+
+function stripProvinces(G, seat, count) {
+  const candidates = Object.values(G.provinces)
+    .filter((province) => province.owner === seat && !province.capital)
+    .slice(0, count);
+  for (const province of candidates) {
+    province.owner = null;
+    province.faceUp = true;
+    delete province.occupiedBy;
+    clearProvinceClaims(G, province.id);
+  }
+  return candidates.map((province) => province.id);
+}
+
+function assignStrippedProvince(G, provinceId, recipient) {
+  const province = G.provinces[provinceId];
+  if (!province || !(recipient in G.players)) return false;
+  if (recipient === G.crownHolder && provinceCount(G, recipient) >= CONFIG.domainLimit) {
+    return false;
+  }
+  province.owner = recipient;
+  province.faceUp = true;
+  delete province.occupiedBy;
+  clearProvinceClaims(G, provinceId);
+  return true;
+}
+
+function distributeStrippedProvinces(G, provinceIds, recipients, reason, favorPerGrant = 0) {
+  const unassigned = [];
+  let cursor = 0;
+  for (const provinceId of provinceIds) {
+    let assigned = false;
+    for (let attempt = 0; attempt < recipients.length; attempt += 1) {
+      const index = (cursor + attempt) % recipients.length;
+      const recipient = recipients[index];
+      if (!assignStrippedProvince(G, provinceId, recipient)) continue;
+      if (favorPerGrant && recipient in G.favor) {
+        adjustFavor(G, recipient, favorPerGrant, `${reason}: ${provinceId}`);
+      }
+      G.log.push(`${reason}: ${provinceId} goes to seat ${recipient}.`);
+      cursor = (index + 1) % recipients.length;
+      assigned = true;
+      break;
+    }
+    if (!assigned) {
+      unassigned.push(provinceId);
+    }
+  }
+  return unassigned;
+}
+
+function applyCivilWarCasualties(G) {
+  for (const player of Object.values(G.players)) {
+    const dead = Math.floor(player.troops / 4);
+    player.troops = Math.max(0, player.troops - dead);
+  }
+}
+
+function resetReignFavor(G, newKing, neutralSeats) {
+  G.favor = {};
+  for (const seat of Object.keys(G.players)) {
+    if (seat !== newKing) G.favor[seat] = 0;
+  }
+  for (const seat of neutralSeats) adjustFavor(G, seat, -1, 'neutral after usurpation');
+}
+
+function applyRebelVictory(G, rebellion) {
+  const rebel = rebellion.leader;
+  const oldKing = G.crownHolder;
+  const loyalSeats = Object.entries(rebellion.sides || {})
+    .filter(([, side]) => side === 'loyal')
+    .map(([seat]) => seat);
+  const neutralSeats = Object.entries(rebellion.sides || {})
+    .filter(([, side]) => side === 'neutral')
+    .map(([seat]) => seat);
+  const rebelSeats = [rebel, ...Object.entries(rebellion.sides || {})
+    .filter(([, side]) => side === 'rebel')
+    .map(([seat]) => seat)];
+  const stripped = [];
+  let distributable;
+
+  const stripForCoalition = (seat, requested) => {
+    const amount = Math.min(requested, distributable);
+    const provinces = stripProvinces(G, seat, amount);
+    stripped.push(...provinces);
+    if (Number.isFinite(distributable)) distributable -= provinces.length;
+    if (amount < requested) {
+      G.log.push(`Usurpation: Domain Limit prevents stripping more from seat ${seat}.`);
+    }
+  };
+
+  // The Capital travels with the Crown before the deposed King's domain is
+  // trimmed to three non-capital provinces.
+  for (const province of Object.values(G.provinces)) {
+    if (province.capital) province.owner = rebel;
+  }
+  G.crownHolder = rebel;
+  G.offices.marshal = rebel;
+  const rebelDukes = rebelSeats.filter((seat) => seat !== rebel);
+  stripped.push(...stripProvinces(G, rebel,
+    Math.max(0, provinceCount(G, rebel) - CONFIG.domainLimit)));
+  distributable = rebelDukes.length
+    ? Infinity
+    : Math.max(0, CONFIG.domainLimit - provinceCount(G, rebel));
+  const oldKingExcess = Math.max(0, Object.values(G.provinces)
+    .filter((province) => province.owner === oldKing && !province.capital).length - 3);
+  const trimmedOldKing = stripProvinces(G, oldKing, oldKingExcess);
+  stripped.push(...trimmedOldKing);
+  if (Number.isFinite(distributable)) {
+    distributable = Math.max(0, distributable - trimmedOldKing.length);
+  }
+  for (const seat of loyalSeats) stripForCoalition(seat, 2);
+
+  // Rebel dukes receive stripped land before the new King, while the Crown
+  // itself remains subject to Domain Limit.
+  const unassigned = distributeStrippedProvinces(G, stripped, rebelSeats, 'Usurpation distribution');
+  if (unassigned.length) {
+    throw new Error('rebellion distribution exceeded the planned coalition capacity');
+  }
+  G.players[rebel].prestige += CONFIG.prestige.usurperBonus;
+  resetReignFavor(G, rebel, neutralSeats);
+  G.log.push(`REBELLION SUCCEEDS. Seat ${rebel} is crowned (+${CONFIG.prestige.usurperBonus}).`);
+}
+
+function applyKingVictory(G, rebellion) {
+  const rebel = rebellion.leader;
+  const rebelSeats = [rebel, ...Object.entries(rebellion.sides || {})
+    .filter(([, side]) => side === 'rebel')
+    .map(([seat]) => seat)];
+  const loyalSeats = Object.entries(rebellion.sides || {})
+    .filter(([, side]) => side === 'loyal')
+    .map(([seat]) => seat);
+  const neutralSeats = Object.entries(rebellion.sides || {})
+    .filter(([, side]) => side === 'neutral')
+    .map(([seat]) => seat);
+  const stripped = [];
+
+  stripped.push(...stripProvinces(G, rebel, 2));
+  for (const seat of rebelSeats.slice(1)) stripped.push(...stripProvinces(G, seat, 1));
+  const loyalistRemainder = distributeStrippedProvinces(
+    G, stripped, loyalSeats, 'Crushed-rebellion distribution', CONFIG.favor.onGrantProvince
+  );
+  distributeStrippedProvinces(
+    G, loyalistRemainder, [G.crownHolder], 'Crushed-rebellion Crown distribution'
+  );
+
+  for (const seat of rebelSeats) {
+    G.favor[seat] = CONFIG.rebellionFavorFloor;
+    G.players[seat].rebelCooldownUntilYear =
+      G.year + CONFIG.rebellionCooldownYears;
+  }
+  for (const seat of neutralSeats) adjustFavor(G, seat, -1, 'neutral after King victory');
+  G.players[rebel].prestige += CONFIG.prestige.failedRebelLeader;
+  G.log.push(`REBELLION CRUSHED. Seat ${rebel} ${CONFIG.prestige.failedRebelLeader} prestige, rebels Favor -> floor.`);
+}
+
 export function hasCharacter(G, seat, effect) {
   return G.players[seat].characters.some((cardId) => {
     const definition = card(cardId);
@@ -368,6 +529,7 @@ export const actionMoves = {
     // Duke -> king raises that duke's favor; king -> duke raises that duke's favor.
     const dukeSeat = isKing(G, playerID) ? toSeat : playerID;
     if (!(dukeSeat in G.favor)) return INVALID_MOVE;
+    if (G.players[dukeSeat].rebelCooldownUntilYear >= G.year) return INVALID_MOVE;
     p.gold -= CONFIG.giftCost;
     adjustFavor(G, dukeSeat, CONFIG.favor.onGift, 'gift');
     p.actionsLeft -= 1;
@@ -832,8 +994,6 @@ export const warMoves = {
     if (!isKing(G, playerID)) return INVALID_MOVE;
     if (!G.activeRebellion) return INVALID_MOVE;
     if (G.activeRebellion.step && G.activeRebellion.step !== 'locked') return INVALID_MOVE;
-    const rebel = G.activeRebellion.leader;
-    const P = CONFIG.prestige;
     const revealed = resolveSchemes(G, 'rebellionBattle');
     const strength = rebellionBattleStrength(G, revealed);
     const rebelForce = strength.rebels;
@@ -841,29 +1001,11 @@ export const warMoves = {
     G.log.push(`REBELLION STRENGTH: rebels ${rebelForce}, king ${kingForce}.`);
 
     if (rebelForce > kingForce) {
-      // Usurpation: crown changes hands (§10). Capital travels with the crown.
-      G.players[rebel].prestige += P.usurperBonus;
-      const oldKing = G.crownHolder;
-      // Move capital ownership.
-      for (const prov of Object.values(G.provinces)) {
-        if (prov.capital) prov.owner = rebel;
-      }
-      G.crownHolder = rebel;
-      G.offices.marshal = rebel;
-      // Favor resets on a new reign; rebuild tracks around the new king.
-      const newDukes = Object.keys(G.players).filter((s) => s !== rebel);
-      G.favor = {};
-      for (const s of newDukes) G.favor[s] = 0;
-      G.log.push(`REBELLION SUCCEEDS. Seat ${rebel} is crowned (+${P.usurperBonus}).`);
-      // TODO(§10): new king strips up to 2 provinces from each loyalist.
+      applyRebelVictory(G, G.activeRebellion);
     } else {
-      // Crushed. -3 prestige, favor to floor with cooldown, strip land (TODO).
-      G.players[rebel].prestige += P.failedRebelLeader;
-      G.favor[rebel] = CONFIG.rebellionFavorFloor;
-      G.players[rebel].rebelCooldownUntilYear = G.year + CONFIG.rebellionCooldownYears;
-      G.log.push(`REBELLION CRUSHED. Seat ${rebel} ${P.failedRebelLeader} prestige, favor -> floor.`);
-      // TODO(§10): strip 2 provinces from leader, 1 from each other rebel.
+      applyKingVictory(G, G.activeRebellion);
     }
+    applyCivilWarCasualties(G);
     G.activeRebellion = null;
   },
 

@@ -149,11 +149,11 @@ both branches, plus the neutral-seat penalty. Design §10.
 
 **Blocked by:** M4.2
 
-- [ ] Rebels win: rebel leader takes the Crown (+`usurperBonus`), Capital transfers, favor resets to 0 for the new reign; new king may strip up to 2 provinces from each Loyalist and auto-trims the deposed king to duke size; stripped land distributed to the winning coalition honoring Domain Limit
-- [ ] King wins: rebel leader −3 prestige; king strips 2 provinces from the leader + 1 from each other rebel; stripped land goes to Loyalists first (+2 favor) then the king up to limit; all rebels (not just the leader) drop to the favor floor with the `rebellionCooldownYears` cooldown
-- [ ] Neutral: the winner marks each Neutral seat −1 favor (or starts them at −1 under a new king)
-- [ ] Both win/lose branches transfer land and prestige per §10
-- [ ] A new king starts with a blank favor ledger
+- [x] Rebels win: rebel leader takes the Crown (+`usurperBonus`), Capital transfers, favor resets to 0 for the new reign; new king may strip up to 2 provinces from each Loyalist and auto-trims the deposed king to duke size; stripped land distributed to the winning coalition honoring Domain Limit
+- [x] King wins: rebel leader −3 prestige; king strips 2 provinces from the leader + 1 from each other rebel; stripped land goes to Loyalists first (+2 favor) then the king up to limit; all rebels (not just the leader) drop to the favor floor with the `rebellionCooldownYears` cooldown
+- [x] Neutral: the winner marks each Neutral seat −1 favor (or starts them at −1 under a new king)
+- [x] Both win/lose branches transfer land and prestige per §10
+- [x] A new king starts with a blank favor ledger
 
 ## M5.1 — Council voting
 

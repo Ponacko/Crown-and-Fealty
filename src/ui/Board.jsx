@@ -202,14 +202,13 @@ function PhaseControls({ phase, moves, G, me, isKing }) {
           </div>}
           <div>Propose decree:
             {isKing
-              ? Object.entries(G.players).flatMap(([seat, player]) =>
-                player.hand
-                  .filter((held) => CARDS.find((card) => card.id === held.cardId)?.type === 'decree')
-                  .map((held) => (
-                    <button key={held.uid} style={btn} disabled={G.pendingVote}
-                      onClick={() => moves.proposeDecree(held.uid)}>
-                      {cardName(held.uid)} (seat {seat})
-                    </button>)))
+              ? G.players[me].hand
+                .filter((held) => CARDS.find((card) => card.id === held.cardId)?.type === 'decree')
+                .map((held) => (
+                  <button key={held.uid} style={btn} disabled={G.pendingVote}
+                    onClick={() => moves.proposeDecree(held.uid)}>
+                    {cardName(held.uid)}
+                  </button>))
               : <span> king only</span>}
           </div>
           <div>Declare war:

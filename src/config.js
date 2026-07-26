@@ -83,6 +83,30 @@ export const CONFIG = {
   draftPackSize: 5,      // cards dealt to each seat's pack at Draft's start
   draftPicksPerYear: 4,  // pick-and-pass rounds; the (packSize - this) leftover is discarded
 
+  // ---- Court cards (§9) --------------------------------------------------
+  // Card effects are rules, but their balance numbers belong here with the
+  // rest of the tuning surface.
+  cards: {
+    taxFarmersGold: 3,
+    marketDayGold: 2,
+    forcedLevyTroops: 3,
+    mercenaryTroops: 2,
+    forcedLevyTaxPenalty: 1,
+    envoyGarrisonReduction: 2,
+    tournamentFavor: 1,
+    tournamentPrestige: 1,
+    honoraryTitleFavor: 1,
+    honoraryTitlePrestige: 1,
+    characterSlots: 1,
+    generalStrength: 1,
+    legatePrestige: 1,
+    claimFavorPenalty: -1,
+    ambushStrength: 3,
+    poisonGarrison: 3,
+    bribedCaptainsCubes: 2,
+    forgedLettersFavor: -2,
+  },
+
   // ---- War (§7) ----------------------------------------------------------
   casualties: {
     winPerN: 4,   // lose 1 cube per N committed on the winning side

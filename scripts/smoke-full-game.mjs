@@ -10,6 +10,7 @@
 import { createRequire } from 'node:module';
 import { CrownAndFealty } from '../src/game/game.js';
 import { CONFIG } from '../src/config.js';
+import { CARDS } from '../src/game/data.js';
 
 // boardgame.io's package.json has no "exports" map, so this subpath isn't
 // resolvable as an ES module import — pull it in via require() instead.
@@ -79,12 +80,7 @@ for (let y = 1; y <= CONFIG.years; y++) {
   move(KING, 'endCouncil');
 
   // §9 Phase 2 (Inis-style pick-and-pass): every seat picks once per round;
-  // the phase ends itself once the final round's leftovers are discarded
-  // (moves.js settleDraftRound). The shared 48-card starter deck (expanding
-  // it is M2b's job) is exhausted by year 4 in a 4-seat game and nothing
-  // reshuffles the discard pile back in (out of scope for M2a), so once it's
-  // dry, dealDraftPacks resolves an all-empty draft immediately in onBegin
-  // and the phase skips straight to 'actions' — that's correct, not a bug.
+  // the phase ends itself once the final round's leftovers are discarded.
   if (state.ctx.phase === 'draft') {
     while (state.G.draftPacks) {
       for (const seat of SEATS) {
@@ -108,11 +104,15 @@ for (let y = 1; y <= CONFIG.years; y++) {
     const current = state.ctx.currentPlayer;
     const bystander = SEATS.find((s) => s !== current);
     expectRejected(bystander, 'pass');
-    // Play a card if we're holding one — a real player spends their hand
-    // instead of hoarding it forever, which also keeps cards cycling back
-    // through the discard pile for the draft's reshuffle-on-empty to reuse.
+    // Play a no-target Action when available. Targeted cards, Schemes, and
+    // Decrees are covered by their own milestone tests and should remain in
+    // hand here rather than generating expected invalid-move noise.
     const hand = state.G.players[current].hand;
-    if (hand.length > 0) dispatchMove(current, 'playCard', [hand[0].uid]);
+    const safeCard = hand.find((held) => {
+      const definition = CARDS.find((candidate) => candidate.id === held.cardId);
+      return definition && ['gold3', 'gold2'].includes(definition.effect);
+    });
+    if (safeCard) dispatchMove(current, 'playCard', [safeCard.uid]);
     move(current, 'pass');
   }
   assertPhase('warAndRebellion');

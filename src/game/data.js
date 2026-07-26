@@ -62,10 +62,10 @@ export const FOREIGN_KINGDOMS = [
       { id: 's5', tax: 2, levy: 2 } ] },
 ];
 
-// ---- Starter card deck ----------------------------------------------------
-// A small representative set across the five types (§9). Grow this list to
-// build the real ~110-card deck. `effect` is a string key that moves.js
-// switches on — most are stubbed with TODOs for you to vibecode.
+// ---- Court card deck ------------------------------------------------------
+// A balanced first pass across the five types (§9). The setup code makes
+// several copies of every definition, so this is intentionally a list of
+// card definitions rather than individual physical cards.
 //   type: 'action' | 'scheme' | 'character' | 'claim' | 'decree'
 //   crownOnly: playable only while holding the crown
 export const CARDS = [
@@ -79,6 +79,19 @@ export const CARDS = [
     text: 'CROWN: +1 favor with two dukes, +1 prestige. (Duke: local Feast, +1 favor with king.)' },
   { id: 'act_charter', type: 'action', name: 'Grant Charter', crownOnly: true, effect: 'charter',
     text: 'CROWN: grant one neutral minor-lord province.' },
+  { id: 'act_marketday', type: 'action', name: 'Market Day', effect: 'gold2',
+    text: '+2 gold.' },
+  { id: 'act_mercenaries', type: 'action', name: 'Mercenary Company', effect: 'muster2',
+    text: 'Muster 2 troops free.' },
+  { id: 'act_piousgift', type: 'action', name: 'Pious Gift', effect: 'favor1',
+    text: 'Gain 1 Favor with the King (or choose a duke as King).' },
+  { id: 'act_honorarytitle', type: 'action', name: 'Honorary Title', effect: 'title',
+    text: 'Give a title: the recipient gains 1 Favor and 1 Prestige.' },
+  { id: 'act_emergencytax', type: 'action', name: 'Emergency Tax', effect: 'gold3',
+    text: '+3 gold.' },
+
+  { id: 'act_grainstores', type: 'action', name: 'Grain Stores', effect: 'gold2',
+    text: '+2 gold.' },
 
   { id: 'sch_ambush', type: 'scheme', name: 'Ambush', effect: 'ambush',
     text: 'Reveal in a battle: +3 to your side.' },
@@ -86,17 +99,39 @@ export const CARDS = [
     text: 'When an opponent reveals their dial, 2 of their cubes desert.' },
   { id: 'sch_poison', type: 'scheme', name: 'Poison the Wells', effect: 'poison',
     text: "Reveal in an external war: garrison +3 (make the king lose)." },
+  { id: 'sch_letters', type: 'scheme', name: 'Forged Letters', effect: 'forgedLetters',
+    text: 'Reveal when a rebellion is declared: move any Favor marker -2.' },
 
   { id: 'chr_general', type: 'character', name: 'The Old General', effect: 'general',
     text: '+1 strength always.' },
   { id: 'chr_legate', type: 'character', name: 'The Papal Legate', effect: 'legate',
     text: '+1 prestige/year, but you may never under-commit levies.' },
+  { id: 'chr_captain', type: 'character', name: 'Veteran Captain', effect: 'general',
+    text: '+1 strength always.' },
+  { id: 'chr_bishop', type: 'character', name: 'The Court Bishop', effect: 'legate',
+    text: '+1 prestige/year, but you may never under-commit levies.' },
+  { id: 'chr_retainer', type: 'character', name: 'Loyal Retainer', effect: 'general',
+    text: '+1 strength always.' },
+  { id: 'chr_confessor', type: 'character', name: 'The Royal Confessor', effect: 'legate',
+    text: '+1 prestige/year, but you may never under-commit levies.' },
 
   { id: 'clm_generic', type: 'claim', name: 'Ancestral Claim', effect: 'claim',
+    text: 'Place on a province you do not hold (see §9).' },
+  { id: 'clm_oldcharter', type: 'claim', name: 'Old Charter', effect: 'claim',
+    text: 'Place on a province you do not hold (see §9).' },
+  { id: 'clm_borderright', type: 'claim', name: 'Border Right', effect: 'claim',
+    text: 'Place on a province you do not hold (see §9).' },
+  { id: 'clm_dynastic', type: 'claim', name: 'Dynastic Claim', effect: 'claim',
+    text: 'Place on a province you do not hold (see §9).' },
+  { id: 'clm_wardenship', type: 'claim', name: 'Warden Claim', effect: 'claim',
+    text: 'Place on a province you do not hold (see §9).' },
+  { id: 'clm_succession', type: 'claim', name: 'Succession Claim', effect: 'claim',
     text: 'Place on a province you do not hold (see §9).' },
 
   { id: 'dec_magna', type: 'decree', name: 'Magna Carta', crownOnly: true, effect: 'magnaCarta',
     text: 'Council vote: Tax Law may never be High again.' },
   { id: 'dec_army', type: 'decree', name: 'Royal Standing Army', crownOnly: true, effect: 'standingArmy',
     text: "Council vote: king's Domain Limit +1." },
+  { id: 'dec_combat', type: 'decree', name: 'Trial by Combat', crownOnly: true, effect: 'trialByCombat',
+    text: 'Council vote: rebellions give +2 to the smaller side.' },
 ];

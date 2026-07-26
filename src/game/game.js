@@ -2,7 +2,7 @@
 // THE GAME OBJECT — phases, turn model, end condition.
 // Year = council -> draft -> actions -> warAndRebellion -> harvest -> (loop)
 // ==========================================================================
-import { ActivePlayers } from 'boardgame.io/core';
+import { ActivePlayers } from 'boardgame.io/dist/esm/core.js';
 import { CONFIG } from '../config.js';
 import { setup } from './setup.js';
 import {

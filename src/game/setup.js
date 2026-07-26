@@ -43,6 +43,7 @@ export function setup({ ctx, random }) {
       schemes: [],       // face-down cards {cardId}
       characters: [],    // persistent advisor cardIds
       claims: [],        // {cardId, provinceId}
+      taxPenalty: 0,     // temporary next-Harvest tax loss from card effects
       actionsLeft: 0,
       committed: null,    // secret troop commitment for the current war
       rebelCooldownUntilYear: 0,
@@ -68,7 +69,11 @@ export function setup({ ctx, random }) {
       chancellor: null,
       spymaster: null,
     },
-    foreignKingdoms: FOREIGN_KINGDOMS.map((fk) => ({ ...fk, conquered: false })),
+    foreignKingdoms: FOREIGN_KINGDOMS.map((fk) => ({
+      ...fk,
+      baseGarrison: fk.garrison,
+      conquered: false,
+    })),
     // Pending / active flags used across phases
     pendingWar: null,      // {kingdomId} declared in Council, resolved in Phase 4
     activeRebellion: null, // {leader, sides:{seat:'loyal'|'rebel'|'neutral'}}
@@ -86,8 +91,8 @@ export function setup({ ctx, random }) {
   };
 }
 
-// Simple deterministic set of card copies: repeat the sample set a few times
-// so there are enough cards to draft. Replace with the real ~110-card deck.
+// Repeat the balanced card list four times to make a shared deck large enough
+// for six annual drafts while retaining several copies of every card.
 // Shuffled once via the `random` plugin (§3 guardrail: no Math.random()) by
 // the caller above — this just builds the unshuffled list.
 function buildStarterDeck() {

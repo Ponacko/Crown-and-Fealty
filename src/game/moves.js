@@ -7,7 +7,10 @@
 //   context = { G, ctx, playerID, events, random, log }
 // Mutate G directly (immer). Return INVALID_MOVE to reject.
 // ==========================================================================
-import { INVALID_MOVE } from 'boardgame.io/core';
+// Use the explicit ESM file so the same game module works in Vite and in the
+// Node-based reducer tests on Node 20 (the package's directory subpath is not
+// a valid Node ESM import).
+import { INVALID_MOVE } from 'boardgame.io/dist/esm/core.js';
 import { CONFIG } from '../config.js';
 import { CARDS } from './data.js';
 import {
@@ -19,6 +22,135 @@ import {
 
 const isKing = (G, playerID) => playerID === G.crownHolder;
 const card = (cardId) => CARDS.find((c) => c.id === cardId);
+
+export function hasCharacter(G, seat, effect) {
+  return G.players[seat].characters.some((cardId) => {
+    const definition = card(cardId);
+    return definition && definition.effect === effect;
+  });
+}
+
+// Exposed for the upcoming war/rebellion milestones: Character strength is a
+// passive modifier, not a new troop pool (§9).
+export function characterStrength(G, seat) {
+  return hasCharacter(G, seat, 'general') ? CONFIG.cards.generalStrength : 0;
+}
+
+export function levyValue(G, seat) {
+  return Object.values(G.provinces)
+    .filter((province) => province.owner === seat)
+    .reduce((total, province) => total + province.levy, 0);
+}
+
+export function levyDuty(G, seat) {
+  return Math.floor(levyValue(G, seat) * CONFIG.levyLaw[G.levyLaw]);
+}
+
+function claimOn(G, provinceId) {
+  for (const [seat, player] of Object.entries(G.players)) {
+    const claim = player.claims.find((entry) => entry.provinceId === provinceId);
+    if (claim) return { seat, claim };
+  }
+  return null;
+}
+
+// Reveal face-down cards at their public trigger. A real Scheme resolves once
+// and is discarded; a bluffed non-Scheme is revealed as a dud at a battle.
+// The returned bonuses keep the trigger-specific rules out of the battle
+// reducers while leaving the hidden card identity in player.schemes until now.
+export function resolveSchemes(G, trigger, details = {}) {
+  const result = {
+    attackBonus: 0,
+    attackBonusBySeat: {},
+    garrisonBonus: 0,
+  };
+
+  for (const [seat, player] of Object.entries(G.players)) {
+    const remaining = [];
+    for (const scheme of player.schemes) {
+      const definition = card(scheme.cardId);
+      const effect = definition?.effect;
+      const isBluff = definition?.type !== 'scheme';
+      let resolves = false;
+
+      if (trigger === 'externalWar') {
+        resolves = isBluff || ['ambush', 'bribe', 'poison'].includes(effect);
+        if (effect === 'ambush') {
+          result.attackBonus += CONFIG.cards.ambushStrength;
+          result.attackBonusBySeat[seat] =
+            (result.attackBonusBySeat[seat] || 0) + CONFIG.cards.ambushStrength;
+        } else if (effect === 'poison') {
+          result.garrisonBonus += CONFIG.cards.poisonGarrison;
+        } else if (effect === 'bribe') {
+          const target = scheme.targetSeat && scheme.targetSeat !== seat
+            ? scheme.targetSeat
+            : Object.keys(G.pendingWar?.commits || {}).find((candidate) => candidate !== seat);
+          if (target && target in (G.pendingWar?.commits || {})) {
+            const desertions = Math.min(CONFIG.cards.bribedCaptainsCubes,
+              G.pendingWar.commits[target]);
+            G.pendingWar.commits[target] -= desertions;
+            G.players[target].committed = G.pendingWar.commits[target];
+            G.log.push(`Bribed Captains: ${desertions} cubes desert from seat ${target}.`);
+          }
+        }
+      } else if (trigger === 'rebellionDeclared') {
+        resolves = effect === 'forgedLetters';
+        if (effect === 'forgedLetters') {
+          const target = scheme.targetSeat && scheme.targetSeat !== seat
+            ? scheme.targetSeat
+            : Object.keys(G.favor).find((candidate) => candidate !== seat);
+          if (target && target in G.favor) {
+            adjustFavor(G, target, CONFIG.cards.forgedLettersFavor,
+              `Forged Letters from seat ${seat}`);
+          }
+        }
+      } else if (trigger === 'rebellionBattle') {
+        resolves = effect === 'ambush';
+        if (effect === 'ambush') {
+          result.attackBonusBySeat[seat] =
+            (result.attackBonusBySeat[seat] || 0) + CONFIG.cards.ambushStrength;
+        }
+      }
+
+      if (resolves) {
+        G.discard.push({ uid: scheme.uid, cardId: scheme.cardId });
+        G.log.push(`${definition ? definition.name : 'Bluff'} revealed by seat ${seat}.`);
+      } else {
+        remaining.push(scheme);
+      }
+    }
+    player.schemes = remaining;
+  }
+
+  return result;
+}
+
+// Central grant seam for Charter now and war/rebellion distribution later.
+// A claimed province defaults to its claimant when no recipient is supplied;
+// awarding it elsewhere resolves the claim with the §9 Favor penalty.
+export function grantProvince(G, provinceId, requestedRecipient, reason = 'grant') {
+  const province = G.provinces[provinceId];
+  if (!province || province.owner === requestedRecipient) return false;
+
+  const claim = claimOn(G, provinceId);
+  const recipient = requestedRecipient ?? claim?.seat;
+  if (!recipient || !(recipient in G.players)) return false;
+
+  if (claim && claim.seat !== recipient) {
+    adjustFavor(G, claim.seat, CONFIG.cards.claimFavorPenalty,
+      `${reason}: claim on ${provinceId} awarded elsewhere`);
+  }
+
+  province.owner = recipient;
+  if (recipient in G.favor) {
+    adjustFavor(G, recipient, CONFIG.favor.onGrantProvince, `${reason}: ${provinceId}`);
+  }
+
+  for (const player of Object.values(G.players)) {
+    player.claims = player.claims.filter((entry) => entry.provinceId !== provinceId);
+  }
+  return true;
+}
 
 // ---------------------------------------------------------------------------
 // PHASE 1 — COUNCIL (king proposes; laws voted; war declared; offices granted)
@@ -203,29 +335,133 @@ export const actionMoves = {
     G.log.push(`Seat ${playerID} holds court (draw 2, keep 1).`);
   },
 
-  // Play a card from hand. TODO(cards): implement each `effect`. Only a couple
-  // are wired; the rest just log and discard so the loop keeps running.
-  playCard({ G, playerID }, uid) {
+  // Play a card from hand. Schemes are stored face-down; the optional
+  // `{ faceDown: true }` form lets any card be played as a bluff (§9).
+  playCard({ G, playerID }, uid, ...args) {
     const p = G.players[playerID];
     if (p.actionsLeft <= 0) return INVALID_MOVE;
     const idx = p.hand.findIndex((h) => h.uid === uid);
     if (idx < 0) return INVALID_MOVE;
     const held = p.hand[idx];
     const def = card(held.cardId);
-    if (def.crownOnly && !isKing(G, playerID)) {
+    if (!def) return INVALID_MOVE;
+  const bluff = args[0] && typeof args[0] === 'object' && args[0].faceDown;
+  if (def.crownOnly && !isKing(G, playerID) && !bluff) {
       // A duke may hold crown-only cards (bank for a coup) but not play them.
       return INVALID_MOVE;
     }
+
+    if (def.type === 'scheme' || bluff) {
+      const targetSeat = def.type === 'scheme'
+        ? args[0]
+        : args[0].targetSeat;
+      if (targetSeat !== undefined &&
+        (!(targetSeat in G.players) || targetSeat === playerID)) return INVALID_MOVE;
+      p.schemes.push({ uid: held.uid, cardId: held.cardId, targetSeat });
+      p.hand.splice(idx, 1);
+      p.actionsLeft -= 1;
+      G.log.push(`Seat ${playerID} plays a card face down.`);
+      return;
+    }
+
+    const dukes = Object.keys(G.favor);
+    const firstNeutralMinor = () => Object.values(G.provinces).find((province) =>
+      province.owner == null && province.region === 'minor'
+    );
+    const addFreeTroops = (amount) => {
+      const capacity = levyValue(G, playerID) - p.troops;
+      const added = Math.min(amount, Math.max(0, capacity));
+      if (added <= 0) return false;
+      p.troops += added;
+      return true;
+    };
+
+    // Invalid targets are rejected before the card leaves the hand.
     switch (def.effect) {
       case 'gold3':
-        p.gold += 3;
+        p.gold += CONFIG.cards.taxFarmersGold;
+        break;
+      case 'gold2':
+        p.gold += CONFIG.cards.marketDayGold;
         break;
       case 'forcedLevy':
-        p.troops += 3; // TODO: -1 tax next harvest
+        if (!addFreeTroops(CONFIG.cards.forcedLevyTroops)) return INVALID_MOVE;
+        p.taxPenalty = (p.taxPenalty || 0) + CONFIG.cards.forcedLevyTaxPenalty;
         break;
-      // TODO(cards): ambush, poison, tournament, charter, decrees, claims, etc.
+      case 'muster2':
+        if (!addFreeTroops(CONFIG.cards.mercenaryTroops)) return INVALID_MOVE;
+        break;
+      case 'envoy': {
+        const kingdomId = args[0] ?? G.foreignKingdoms.find((kingdom) => !kingdom.conquered)?.id;
+        const kingdom = G.foreignKingdoms.find((entry) =>
+          entry.id === kingdomId && !entry.conquered
+        );
+        if (!kingdom) return INVALID_MOVE;
+        kingdom.garrison = Math.max(0,
+          kingdom.garrison - CONFIG.cards.envoyGarrisonReduction);
+        G.log.push(`Diplomatic Envoy reduces ${kingdom.name}'s garrison to ${kingdom.garrison}.`);
+        break;
+      }
+      case 'tournament': {
+        const requested = Array.isArray(args[0]) ? args[0] : args.filter(Boolean);
+        const targets = (requested.length ? requested : dukes.slice(0, 2))
+          .filter((seat, index, list) => seat in G.favor && list.indexOf(seat) === index);
+        if (targets.length !== 2) return INVALID_MOVE;
+        for (const duke of targets) adjustFavor(G, duke, CONFIG.cards.tournamentFavor, 'Royal Tournament');
+        p.prestige += CONFIG.cards.tournamentPrestige;
+        break;
+      }
+      case 'charter': {
+        const provinceId = args[0] ?? firstNeutralMinor()?.id;
+        const province = provinceId && G.provinces[provinceId];
+        if (!province || province.owner != null || province.region !== 'minor') return INVALID_MOVE;
+        const recipient = args[1] ?? claimOn(G, provinceId)?.seat ?? dukes[0];
+        if (!(recipient in G.favor)) return INVALID_MOVE;
+        if (!grantProvince(G, provinceId, recipient, 'Grant Charter')) return INVALID_MOVE;
+        break;
+      }
+      case 'favor1': {
+        const recipient = isKing(G, playerID) ? (args[0] ?? dukes[0]) : playerID;
+        if (!(recipient in G.favor)) return INVALID_MOVE;
+        adjustFavor(G, recipient, CONFIG.cards.honoraryTitleFavor, 'Pious Gift');
+        break;
+      }
+      case 'title': {
+        const recipient = args[0] ?? playerID;
+        if (!(recipient in G.favor)) return INVALID_MOVE;
+        adjustFavor(G, recipient, CONFIG.cards.honoraryTitleFavor, 'Honorary Title');
+        G.players[recipient].prestige += CONFIG.cards.honoraryTitlePrestige;
+        break;
+      }
+      case 'claim': {
+        const provinceId = args[0];
+        const province = provinceId && G.provinces[provinceId];
+        if (!province || province.owner === playerID) return INVALID_MOVE;
+        if (claimOn(G, provinceId)) return INVALID_MOVE;
+        p.claims.push({ cardId: held.cardId, provinceId });
+        G.log.push(`Seat ${playerID} claims ${province.name}.`);
+        break;
+      }
+      case 'general':
+      case 'legate':
+        if (p.characters.length >= CONFIG.cards.characterSlots) return INVALID_MOVE;
+        p.characters.push(held.cardId);
+        G.log.push(`Seat ${playerID} appoints ${def.name}.`);
+        p.hand.splice(idx, 1);
+        p.actionsLeft -= 1;
+        return;
+      case 'ambush':
+      case 'bribe':
+      case 'poison':
+      case 'forgedLetters':
+        return INVALID_MOVE;
+      case 'magnaCarta':
+      case 'standingArmy':
+      case 'trialByCombat':
+        // M2d routes Decrees through the Council vote.
+        return INVALID_MOVE;
       default:
-        G.log.push(`(stub) effect "${def.effect}" not yet implemented.`);
+        return INVALID_MOVE;
     }
     p.hand.splice(idx, 1);
     G.discard.push(held);
@@ -251,6 +487,10 @@ export const warMoves = {
   commitTroops({ G, playerID }, count) {
     if (!G.pendingWar) return INVALID_MOVE;
     count = Math.max(0, Math.min(count | 0, G.players[playerID].troops));
+    // §9: a Papal Legate forbids deliberately falling short of levy duty.
+    if (hasCharacter(G, playerID, 'legate') && count < levyDuty(G, playerID)) {
+      return INVALID_MOVE;
+    }
     G.pendingWar.commits[playerID] = count;
     G.players[playerID].committed = count;
   },
@@ -261,6 +501,7 @@ export const warMoves = {
     if (!isKing(G, playerID)) return INVALID_MOVE;
     if (!G.pendingWar) return INVALID_MOVE;
     const fk = G.foreignKingdoms.find((k) => k.id === G.pendingWar.kingdomId);
+    const revealed = resolveSchemes(G, 'externalWar');
     const committed = Object.values(G.pendingWar.commits).reduce((a, b) => a + b, 0);
     // Near-deterministic swing (§7.4). If no index passed, pick randomly.
     const deck = CONFIG.warModifierDeck;
@@ -269,8 +510,8 @@ export const warMoves = {
         ? Math.max(0, Math.min(modifierIndex, deck.length - 1))
         : Math.floor((random ? random.Number() : Math.random()) * deck.length)
     ];
-    const attack = committed;
-    const defense = fk.garrison + mod;
+    const attack = committed + revealed.attackBonus;
+    const defense = fk.garrison + mod + revealed.garrisonBonus;
     const P = CONFIG.prestige;
 
     if (attack > defense) {
@@ -315,6 +556,7 @@ export const warMoves = {
     if (G.activeRebellion) return INVALID_MOVE;
     G.activeRebellion = { leader: playerID };
     G.rebellionThisYear = true;
+    resolveSchemes(G, 'rebellionDeclared');
     G.log.push(`Seat ${playerID} raises the banner of rebellion!`);
   },
 
@@ -324,9 +566,12 @@ export const warMoves = {
     if (!G.activeRebellion) return INVALID_MOVE;
     const rebel = G.activeRebellion.leader;
     const P = CONFIG.prestige;
-    const rebelForce = G.players[rebel].troops; // TODO: + allies + schemes
+    const revealed = resolveSchemes(G, 'rebellionBattle');
+    const rebelForce = G.players[rebel].troops +
+      (revealed.attackBonusBySeat[rebel] || 0);
     const kingForce =
-      G.players[G.crownHolder].troops + CONFIG.marshalBattleBonus; // marshal is king's
+      G.players[G.crownHolder].troops + CONFIG.marshalBattleBonus +
+      (revealed.attackBonusBySeat[G.crownHolder] || 0);
 
     if (rebelForce > kingForce) {
       // Usurpation: crown changes hands (§10). Capital travels with the crown.

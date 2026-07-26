@@ -40,7 +40,8 @@ rules code.
 - `moves.js` (draft) → **Inis-style pick-and-pass** (currently a straight deal).
 - `moves.js` (war) → **levy-duty calc, conquest distribution honoring Domain Limit, border occupation on loss, reparations borrowing**.
 - `moves.js` (rebellion) → **side-picking (loyalist/rebel/neutral), binding offers, castle/marshal/scheme bonuses, land stripping**.
-- `moves.js` (cards) → most card `effect`s just log; implement them in the `playCard` switch.
+- `moves.js` (cards) → Schemes resolve in M2c and Decrees in M2d; the Action,
+  Character, and Claim cards from M2b are wired through `playCard`.
 - `game.js` → **`playerView`** to redact hidden info for networked play.
 
 ## Codebase map

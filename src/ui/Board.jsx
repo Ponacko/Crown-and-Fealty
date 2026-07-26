@@ -94,6 +94,74 @@ export function Board({ G, ctx, moves, playerID }) {
   );
 }
 
+function CardControls({ held, moves, G, me, isKing }) {
+  const definition = CARDS.find((card) => card.id === held.cardId);
+  if (!definition) return null;
+  if (definition.crownOnly && !isKing) {
+    return <button style={btn} disabled>Hold {definition.name} (crown-only)</button>;
+  }
+
+  if (definition.effect === 'envoy') {
+    return G.foreignKingdoms.filter((kingdom) => !kingdom.conquered).map((kingdom) => (
+      <button key={`${held.uid}-${kingdom.id}`} style={btn}
+        onClick={() => moves.playCard(held.uid, kingdom.id)}>
+        Envoy → {kingdom.name}
+      </button>
+    ));
+  }
+
+  if (definition.effect === 'tournament' && isKing) {
+    const dukes = Object.keys(G.favor);
+    const choices = [];
+    for (let i = 0; i < dukes.length; i += 1) {
+      for (let j = i + 1; j < dukes.length; j += 1) {
+        choices.push(
+          <button key={`${held.uid}-${dukes[i]}-${dukes[j]}`} style={btn}
+            onClick={() => moves.playCard(held.uid, [dukes[i], dukes[j]])}>
+            Tournament → {dukes[i]} &amp; {dukes[j]}
+          </button>
+        );
+      }
+    }
+    return choices;
+  }
+
+  if (definition.effect === 'charter' && isKing) {
+    return Object.values(G.provinces)
+      .filter((province) => province.owner == null && province.region === 'minor')
+      .flatMap((province) => Object.keys(G.favor).map((duke) => (
+        <button key={`${held.uid}-${province.id}-${duke}`} style={btn}
+          onClick={() => moves.playCard(held.uid, province.id, duke)}>
+          Charter {province.id} → {duke}
+        </button>
+      )));
+  }
+
+  if (definition.effect === 'claim') {
+    return Object.values(G.provinces).filter((province) => province.owner !== me).map((province) => (
+      <button key={`${held.uid}-${province.id}`} style={btn}
+        onClick={() => moves.playCard(held.uid, province.id)}>
+        Claim {province.id}
+      </button>
+    ));
+  }
+
+  if ((definition.effect === 'favor1' || definition.effect === 'title') && isKing) {
+    return Object.keys(G.favor).map((duke) => (
+      <button key={`${held.uid}-${duke}`} style={btn}
+        onClick={() => moves.playCard(held.uid, duke)}>
+        {definition.name} → {duke}
+      </button>
+    ));
+  }
+
+  return (
+    <button style={btn} onClick={() => moves.playCard(held.uid)}>
+      Play {definition.name}
+    </button>
+  );
+}
+
 function PhaseControls({ phase, moves, G, me, isKing }) {
   const [n, setN] = React.useState(1);
   const num = (
@@ -175,10 +243,9 @@ function PhaseControls({ phase, moves, G, me, isKing }) {
             <button style={btn} onClick={() => moves.holdCourt()}>Hold Court</button>
           </div>
           <div>
-            {mine.hand.map((h) =>
-              <button key={h.uid} style={btn} onClick={() => moves.playCard(h.uid)}>
-                Play {cardName(h.uid)}
-              </button>)}
+            {mine.hand.map((h) => (
+              <CardControls key={h.uid} held={h} moves={moves} G={G} me={me} isKing={isKing} />
+            ))}
           </div>
           <button style={btn} onClick={() => moves.pass()}>PASS (end turn) ▶</button>
         </div>

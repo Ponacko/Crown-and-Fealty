@@ -2,6 +2,7 @@
 // SCORING — all prestige math lives here so balance is auditable.
 // ==========================================================================
 import { CONFIG } from '../config.js';
+import { CARDS } from './data.js';
 
 export function provinceCount(G, seat) {
   return Object.values(G.provinces).filter((p) => p.owner === seat).length;
@@ -32,10 +33,16 @@ export function runHarvest(G) {
 
   // 1) Everyone collects their own province tax as gold.
   for (const seat of Object.keys(G.players)) {
-    const income = Object.values(G.provinces)
+    const grossIncome = Object.values(G.provinces)
       .filter((p) => p.owner === seat)
       .reduce((s, p) => s + p.tax, 0);
+    const taxPenalty = Math.min(grossIncome, G.players[seat].taxPenalty || 0);
+    const income = grossIncome - taxPenalty;
     G.players[seat].gold += income;
+    G.players[seat].taxPenalty = 0;
+    if (taxPenalty > 0) {
+      G.log.push(`Seat ${seat} loses ${taxPenalty} tax from a card effect.`);
+    }
   }
 
   // 2) Dukes pay the crown per Tax Law (may be refused elsewhere; simplified).
@@ -63,6 +70,18 @@ export function runHarvest(G) {
     }
   }
 
+  // §9: The Papal Legate adds yearly prestige. The levy constraint is
+  // enforced by commitTroops in moves.js.
+  for (const seat of Object.keys(G.players)) {
+    const hasLegate = G.players[seat].characters.some((cardId) =>
+      CARDS.some((c) => c.id === cardId && c.effect === 'legate')
+    );
+    if (hasLegate) {
+      G.players[seat].prestige += CONFIG.cards.legatePrestige;
+      G.log.push(`Papal Legate: seat ${seat} +${CONFIG.cards.legatePrestige} prestige.`);
+    }
+  }
+
   // 5) "Just rule": king only, if no rebellion and no war loss this year.
   if (!G.rebellionThisYear && !G.warLostThisYear) {
     G.players[G.crownHolder].prestige += P.justRule;
@@ -72,6 +91,11 @@ export function runHarvest(G) {
   // 6) Reset yearly flags, thaw rebel cooldowns.
   G.rebellionThisYear = false;
   G.warLostThisYear = false;
+
+  // Diplomatic Envoy lasts for the current year only (§9).
+  for (const kingdom of G.foreignKingdoms) {
+    kingdom.garrison = kingdom.baseGarrison ?? kingdom.garrison;
+  }
 }
 
 // Final scoring at game end: land + heir.

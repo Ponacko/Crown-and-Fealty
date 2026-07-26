@@ -13,10 +13,12 @@
 export const PROVINCES = [
   // Crownlands (5, includes Capital)
   { id: 'cap',  name: 'Kingsreach (Capital)', region: 'crown', tax: 3, levy: 2, capital: true },
-  { id: 'cr1',  name: 'Highmoor',   region: 'crown', tax: 2, levy: 1 },
-  { id: 'cr2',  name: 'Elderford',  region: 'crown', tax: 1, levy: 2 },
-  { id: 'cr3',  name: 'Stonewatch', region: 'crown', tax: 1, levy: 1 },
-  { id: 'cr4',  name: 'Greenvale',  region: 'crown', tax: 2, levy: 1 },
+  // The scaffold has no adjacency graph yet; all non-capital Crownlands are
+  // explicit border candidates for external-war occupation (§7.7).
+  { id: 'cr1',  name: 'Highmoor',   region: 'crown', tax: 2, levy: 1, border: true },
+  { id: 'cr2',  name: 'Elderford',  region: 'crown', tax: 1, levy: 2, border: true },
+  { id: 'cr3',  name: 'Stonewatch', region: 'crown', tax: 1, levy: 1, border: true },
+  { id: 'cr4',  name: 'Greenvale',  region: 'crown', tax: 2, levy: 1, border: true },
 
   // Duchy A
   { id: 'a1', name: 'Westmarch',  region: 'duchyA', tax: 2, levy: 2 },

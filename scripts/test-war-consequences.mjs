@@ -85,6 +85,7 @@ warMoves.occupyProvince({ G: defeatGame, playerID: '0' }, occupiedId);
 assert(defeatGame.provinces[occupiedId].owner === null, 'occupied province stayed king-owned');
 assert(defeatGame.provinces[occupiedId].faceUp === false, 'occupied province was not hidden');
 assert(defeatGame.provinces[occupiedId].occupiedBy === 'fk_weak', 'wrong kingdom occupied province');
+assert(defeatGame.provinces[occupiedId].border, 'occupation ignored border metadata');
 assert(defeatGame.pendingOccupation === null, 'occupation choice was not consumed');
 
 const dukeGoldBefore = defeatGame.players['1'].gold;
@@ -93,6 +94,19 @@ assert(defeatGame.players['1'].gold === dukeGoldBefore - 2, 'duke transfer did n
 assert(defeatGame.players['0'].gold === 1 - CONFIG.warReparationsGold + 2,
   'duke transfer did not cover the king debt');
 warMoves.endWarPhase({ G: defeatGame, playerID: '0', events: { endPhase() {} } });
+
+// A later victory against the occupying kingdom restores its hidden province.
+defeatGame.players['0'].troops = 1;
+defeatGame.foreignKingdoms.find((entry) => entry.id === 'fk_weak').garrison = 0;
+defeatGame.pendingWar = {
+  kingdomId: 'fk_weak',
+  commits: { '0': 1, '1': 0, '2': 0, '3': 0 },
+  availableTroops: { '0': 1, '1': 0, '2': 0, '3': 0 },
+  revealed: true,
+};
+warMoves.resolveWar(context(defeatGame, '0'), 1);
+assert(defeatGame.provinces[occupiedId].owner === '0', 're-conquest did not restore occupied land');
+assert(defeatGame.provinces[occupiedId].faceUp, 're-conquest left occupied land hidden');
 
 // A pre-existing over-limit crown cannot close Phase 4 either.
 const overLimitGame = makeGame();

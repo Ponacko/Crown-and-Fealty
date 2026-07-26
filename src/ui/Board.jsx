@@ -283,6 +283,9 @@ function PhaseControls({ phase, moves, G, me, isKing }) {
               </button>
             ))}
           </div>}
+          {!isKing && <button style={btn} onClick={() => moves.transferGold(G.crownHolder, n)}>
+            Cover king reparations ({n}g)
+          </button>}
           {!isKing && !G.activeRebellion &&
             <button style={btn} onClick={() => moves.declareRebellion()}>⚔ DECLARE REBELLION</button>}
           {isKing && G.activeRebellion &&

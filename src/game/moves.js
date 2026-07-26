@@ -519,6 +519,12 @@ function warAttackStrength(G, commits, schemeBonus) {
 }
 
 function materializeConqueredProvinces(G, kingdom) {
+  for (const province of Object.values(G.provinces)) {
+    if (province.occupiedBy !== kingdom.id) continue;
+    province.owner = G.crownHolder;
+    province.faceUp = true;
+    delete province.occupiedBy;
+  }
   const before = provinceCount(G, G.crownHolder);
   const provinceIds = [];
   for (const foreign of kingdom.provinces) {
@@ -547,9 +553,11 @@ function removeConquestObligation(G, provinceId) {
   if (G.pendingConquest.provinceIds.length === 0) G.pendingConquest = null;
 }
 
+// §7.7: the map marks which Crownland provinces are border candidates. The
+// initial scaffold marks every non-capital Crownland until adjacency exists.
 function occupationCandidates(G) {
   return Object.values(G.provinces)
-    .filter((province) => province.owner === G.crownHolder && !province.capital && province.faceUp)
+    .filter((province) => province.owner === G.crownHolder && province.border && province.faceUp)
     .map((province) => province.id);
 }
 
@@ -649,6 +657,7 @@ export const warMoves = {
     return resolveExternalWar(context, modifierIndex);
   },
 
+  // §7.6: surplus conquered land must be granted or sacked before Phase 4 ends.
   grantConquest({ G, playerID }, provinceId, recipient) {
     if (!isKing(G, playerID) || !G.pendingConquest) return INVALID_MOVE;
     if (!G.pendingConquest.provinceIds.includes(provinceId)) return INVALID_MOVE;
@@ -658,6 +667,7 @@ export const warMoves = {
     G.log.push(`King grants conquered province ${provinceId} to seat ${recipient}.`);
   },
 
+  // §7.6: sacking removes the province and costs every Duke one Favor.
   sackConquest({ G, playerID }, provinceId) {
     if (!isKing(G, playerID) || !G.pendingConquest) return INVALID_MOVE;
     if (!G.pendingConquest.provinceIds.includes(provinceId)) return INVALID_MOVE;
@@ -672,6 +682,7 @@ export const warMoves = {
     G.log.push(`King sacks conquered province ${provinceId}.`);
   },
 
+  // §7.7: the King chooses one eligible border province for enemy occupation.
   occupyProvince({ G, playerID }, provinceId) {
     if (!isKing(G, playerID) || !G.pendingOccupation) return INVALID_MOVE;
     if (!G.pendingOccupation.provinceIds.includes(provinceId)) return INVALID_MOVE;
@@ -684,6 +695,7 @@ export const warMoves = {
     G.log.push(`The enemy occupies ${province.name}.`);
   },
 
+  // ADR-0004 / §7.7: binding cash transfers are immediate and unenforced.
   transferGold({ G, playerID }, toSeat, amount) {
     amount = amount | 0;
     if (!(toSeat in G.players) || toSeat === playerID || amount <= 0) return INVALID_MOVE;

@@ -84,9 +84,9 @@ enact. Design §9.
 
 **Blocked by:** M5.1
 
-- [ ] Decree cards can be held by any seat but enacted only by the crown-holder
-- [ ] Enacting a decree routes through the M5.1 voting mechanic — no direct-set path
-- [ ] Every decree in the deck does what its text says once enacted
+- [x] Decree cards can be held by any seat but enacted only by the crown-holder
+- [x] Enacting a decree routes through the M5.1 voting mechanic — no direct-set path
+- [x] Every decree in the deck does what its text says once enacted (Magna Carta bars High Tax Law; Royal Standing Army raises the Crown's Domain Limit; Trial by Combat gives the smaller rebellion side +2)
 
 ## M3.1 — War: levy duty, secret commitment & resolution
 

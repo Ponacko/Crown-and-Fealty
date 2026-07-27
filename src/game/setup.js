@@ -80,7 +80,7 @@ export function setup({ ctx, random }) {
     pendingOccupation: null, // {kingdomId, provinceIds} awaiting defeat choice
     pendingVote: null,      // {proposal, votes} awaiting Council votes
     councilProposals: 0,    // proposals used this Council phase (max 2)
-    enactedDecrees: [],     // decree ids approved by Council; effects are M2d
+    enactedDecrees: [],     // decree ids approved by Council; effects derive from this list
     // §10: side declarations are ordered, then each duke gets one
     // renegotiation before the sides lock for battle.
     activeRebellion: null, // {leader, sides, sideOrder, sideIndex, step, renegotiated, negotiationIndex}

@@ -111,6 +111,14 @@ export const CONFIG = {
     forgedLettersFavor: -2,
   },
 
+  // ---- Decrees (§9) ------------------------------------------------------
+  // Court-card Decrees enacted through a Council vote (M2d). Effects derive
+  // from G.enactedDecrees; these are their balance numbers.
+  decrees: {
+    standingArmyDomainBonus: 1, // Royal Standing Army: king's Domain Limit +N per copy
+    trialByCombatBonus: 2,      // Trial by Combat: +N to the smaller rebellion side
+  },
+
   // ---- War (§7) ----------------------------------------------------------
   casualties: {
     winPerN: 4,   // lose 1 cube per N committed on the winning side

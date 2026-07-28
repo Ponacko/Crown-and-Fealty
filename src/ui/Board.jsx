@@ -9,10 +9,12 @@ import { CARDS } from '../game/data.js';
 
 const box = { border: '1px solid #999', padding: 8, margin: 6, fontFamily: 'monospace', fontSize: 13 };
 const btn = { margin: 2, fontFamily: 'monospace' };
-const cardName = (uid) => {
-  const id = uid.replace(/_\d+$/, '');
-  const c = CARDS.find((x) => x.id === id);
-  return c ? c.name : uid;
+const cardInfo = (cardId) => CARDS.find((c) => c.id === cardId) || null;
+// Name + rules text together, so a card's effect is visible wherever it's
+// listed — hand, draft pack, decree proposals — not just once it's playable.
+const cardLabel = (cardId) => {
+  const c = cardInfo(cardId);
+  return c ? `${c.name} — ${c.text}` : cardId;
 };
 
 // §5: a seat is active either as the sole ctx.currentPlayer (Council,
@@ -63,7 +65,12 @@ export function Board({ G, ctx, moves, playerID }) {
             seat {seat}{seat === G.crownHolder ? ' 👑' : ''}: {p.prestige} prestige
             <div>gold {p.gold} | troops {p.troops} | actionsLeft {p.actionsLeft}</div>
             <div>favor: {seat in G.favor ? G.favor[seat] : 'n/a (king)'}</div>
-            <div>hand: {p.hand.map((h) => cardName(h.uid)).join(', ') || '—'}</div>
+            <div>hand:
+              {p.hand.length === 0 && ' —'}
+              {p.hand.map((h) => (
+                <div key={h.uid} style={{ fontSize: 11 }}>· {cardLabel(h.cardId)}</div>
+              ))}
+            </div>
           </div>
         ))}
       </div>
@@ -99,24 +106,20 @@ export function Board({ G, ctx, moves, playerID }) {
 function CardControls({ held, moves, G, me, isKing }) {
   const definition = CARDS.find((card) => card.id === held.cardId);
   if (!definition) return null;
+
+  let controls;
   if (definition.crownOnly && !isKing) {
-    return <button style={btn} disabled>Hold {definition.name} (crown-only)</button>;
-  }
-
-  if (definition.type === 'decree') {
-    return <button style={btn} disabled>Hold {definition.name} (propose in Council)</button>;
-  }
-
-  if (definition.effect === 'envoy') {
-    return G.foreignKingdoms.filter((kingdom) => !kingdom.conquered).map((kingdom) => (
+    controls = <button style={btn} disabled>Hold (crown-only)</button>;
+  } else if (definition.type === 'decree') {
+    controls = <button style={btn} disabled>Hold (propose in Council)</button>;
+  } else if (definition.effect === 'envoy') {
+    controls = G.foreignKingdoms.filter((kingdom) => !kingdom.conquered).map((kingdom) => (
       <button key={`${held.uid}-${kingdom.id}`} style={btn}
         onClick={() => moves.playCard(held.uid, kingdom.id)}>
         Envoy → {kingdom.name}
       </button>
     ));
-  }
-
-  if (definition.effect === 'tournament' && isKing) {
+  } else if (definition.effect === 'tournament' && isKing) {
     const dukes = Object.keys(G.favor);
     const choices = [];
     for (let i = 0; i < dukes.length; i += 1) {
@@ -129,11 +132,9 @@ function CardControls({ held, moves, G, me, isKing }) {
         );
       }
     }
-    return choices;
-  }
-
-  if (definition.effect === 'charter' && isKing) {
-    return Object.values(G.provinces)
+    controls = choices;
+  } else if (definition.effect === 'charter' && isKing) {
+    controls = Object.values(G.provinces)
       .filter((province) => province.owner == null && province.region === 'minor')
       .flatMap((province) => Object.keys(G.favor).map((duke) => (
         <button key={`${held.uid}-${province.id}-${duke}`} style={btn}
@@ -141,30 +142,35 @@ function CardControls({ held, moves, G, me, isKing }) {
           Charter {province.id} → {duke}
         </button>
       )));
-  }
-
-  if (definition.effect === 'claim') {
-    return Object.values(G.provinces).filter((province) => province.owner !== me).map((province) => (
+  } else if (definition.effect === 'claim') {
+    controls = Object.values(G.provinces).filter((province) => province.owner !== me).map((province) => (
       <button key={`${held.uid}-${province.id}`} style={btn}
         onClick={() => moves.playCard(held.uid, province.id)}>
         Claim {province.id}
       </button>
     ));
-  }
-
-  if ((definition.effect === 'favor1' || definition.effect === 'title') && isKing) {
-    return Object.keys(G.favor).map((duke) => (
+  } else if ((definition.effect === 'favor1' || definition.effect === 'title') && isKing) {
+    controls = Object.keys(G.favor).map((duke) => (
       <button key={`${held.uid}-${duke}`} style={btn}
         onClick={() => moves.playCard(held.uid, duke)}>
         {definition.name} → {duke}
       </button>
     ));
+  } else {
+    controls = (
+      <button style={btn} onClick={() => moves.playCard(held.uid)}>
+        Play {definition.name}
+      </button>
+    );
   }
 
   return (
-    <button style={btn} onClick={() => moves.playCard(held.uid)}>
-      Play {definition.name}
-    </button>
+    <div style={{ marginBottom: 4 }}>
+      <div style={{ fontSize: 11, color: '#555' }}>
+        <b>{definition.name}</b> — {definition.text}
+      </div>
+      {controls}
+    </div>
   );
 }
 
@@ -208,7 +214,7 @@ function PhaseControls({ phase, moves, G, me, isKing }) {
                   .map((held) => (
                     <button key={held.uid} style={btn} disabled={G.pendingVote}
                       onClick={() => moves.proposeDecree(held.uid)}>
-                      {cardName(held.uid)} (seat {seat})
+                      {cardLabel(held.cardId)} (seat {seat})
                     </button>)))
               : <span> king only</span>}
           </div>
@@ -241,7 +247,7 @@ function PhaseControls({ phase, moves, G, me, isKing }) {
           {pack && pack.length > 0
             ? pack.map((c) => (
                 <button key={c.uid} style={btn} onClick={() => moves.pickCard(c.uid)}>
-                  Pick {cardName(c.uid)}
+                  Pick {cardLabel(c.cardId)}
                 </button>
               ))
             : <div>Nothing left in your pack this round.</div>}

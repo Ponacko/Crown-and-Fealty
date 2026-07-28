@@ -79,6 +79,7 @@ export function setup({ ctx, random }) {
     pendingConquest: null, // {kingdomId, provinceIds} awaiting grant or sack
     pendingOccupation: null, // {kingdomId, provinceIds} awaiting defeat choice
     pendingVote: null,      // {proposal, votes} awaiting Council votes
+    pendingRevocation: null, // {target} awaiting the target's Submit/Defy (§11)
     councilProposals: 0,    // proposals used this Council phase (max 2)
     enactedDecrees: [],     // decree ids approved by Council; effects derive from this list
     // §10: side declarations are ordered, then each duke gets one

@@ -33,10 +33,11 @@ rules code.
 - **Scoring spine:** crown rent per year, office prestige, "just rule", end-game land + Heir bonus, winner declaration.
 - Offices with scarcity (Marshal is the king's; only 2 civilian seats).
 - A basic external war and a basic rebellion (troop totals → outcome, crown transfer, usurper/failed-rebel prestige, favor reset on a new reign).
+- Revocation: Royal Prerogative when the King holds a Casus Belli (or the target is Furious), else a Council vote; the target Submits or Defies into the rebellion flow.
 
 **Stubbed, with `TODO(...)` markers in code — your vibecoding targets:**
 - `setup.js` → **auction the crown** (currently seat 0 is just king).
-- `moves.js` (council) → Revocation; Council law/decree voting is wired.
+- `moves.js` (council) → Council law/decree voting and Revocation are wired.
 - `moves.js` (draft) → **Inis-style pick-and-pass** (currently a straight deal).
 - `moves.js` (war) → **levy-duty calc, conquest distribution honoring Domain Limit, border occupation on loss, reparations borrowing**.
 - `moves.js` (rebellion) → **side-picking (loyalist/rebel/neutral), binding offers, castle/marshal/scheme bonuses, land stripping**.

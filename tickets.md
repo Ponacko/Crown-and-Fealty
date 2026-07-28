@@ -175,9 +175,9 @@ submit-or-defy response that routes into the rebellion flow. Design §11.
 
 **Blocked by:** M5.1, M4.1
 
-- [ ] King targets a duke; prerogative (no vote needed) if the king holds a Casus Belli on them or they're at favor floor, else requires an M5.1 vote
-- [ ] Target chooses Submit (lose 1 province of their choice, −2 favor, spends the Casus Belli) or Defy (immediate rebellion with them as leader, entering the M4 flow)
-- [ ] Revocation offers submit-or-rebel and routes Defy into the rebellion flow correctly
+- [x] King targets a duke; prerogative (no vote needed) if the king holds a Casus Belli on them or they're at favor floor, else requires an M5.1 vote
+- [x] Target chooses Submit (lose 1 province of their choice, −2 favor, spends the Casus Belli) or Defy (immediate rebellion with them as leader, entering the M4 flow)
+- [x] Revocation offers submit-or-rebel and routes Defy into the rebellion flow correctly (a Council-time Defy resumes at the right Phase-4 stage via `warAndRebellion`'s new `turn.onBegin`)
 
 ## M6 — Auction the crown (setup)
 

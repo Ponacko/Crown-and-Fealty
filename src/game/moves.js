@@ -22,6 +22,14 @@ import {
 
 const isKing = (G, playerID) => playerID === G.crownHolder;
 const card = (cardId) => CARDS.find((c) => c.id === cardId);
+
+// §6/§11: a Casus Belli is a binary flag — an *earned* strike (refused tax,
+// under-committed levy) or a *standing* one recomputed while the duke sits
+// at Furious (favor floor). Either makes a Revocation the King's prerogative.
+function hasCasusBelli(G, seat) {
+  return (G.casusBelli[seat] || 0) > 0 || G.favor[seat] <= CONFIG.favor.furiousThreshold;
+}
+
 const REBELLION_SIDES = ['loyal', 'rebel', 'neutral'];
 const LAW_LEVELS = ['low', 'medium', 'high'];
 
@@ -97,6 +105,11 @@ function resolveCouncilVote(G) {
         G.discard.push(holder.hand.splice(holderIndex, 1)[0]);
       }
       G.log.push(`Council passes decree ${proposal.cardId} (${yes}-${no}).`);
+    } else if (proposal.type === 'revocation') {
+      // §11: a passed vote opens the same Submit-or-Defy window a prerogative
+      // Revocation opens directly (see proposeRevocation).
+      G.pendingRevocation = { target: proposal.dukeSeat };
+      G.log.push(`Council authorizes Revocation of seat ${proposal.dukeSeat} (${yes}-${no}).`);
     }
   } else {
     G.log.push(`Council rejects ${proposal.type} proposal (${yes}-${no}).`);
@@ -124,6 +137,66 @@ function rebellionDukeOrder(G, ctx) {
 
 function setRebellionStage(events, activePlayers) {
   if (events?.setActivePlayers) events.setActivePlayers({ value: activePlayers });
+}
+
+// Mirrors the activePlayers narrowing a rebellion needs at its current step —
+// shared so a rebellion started in Council (via a Revocation Defy, §11) can
+// be resumed at the right stage once Phase 4 begins (see game.js turn.onBegin).
+function rebellionActivePlayers(G) {
+  const rebellion = G.activeRebellion;
+  if (!rebellion) return null;
+  if (rebellion.step === 'sides') {
+    return { [rebellion.sideOrder[rebellion.sideIndex]]: 'rebellionSides' };
+  }
+  if (rebellion.step === 'negotiation') {
+    return {
+      [rebellion.sideOrder[rebellion.negotiationIndex]]: 'rebellionNegotiation',
+      [G.crownHolder]: 'rebellionNegotiationKing',
+    };
+  }
+  return { [G.crownHolder]: 'rebellionLocked' };
+}
+
+// §10/§11: begin a rebellion with `leader` as Rebel Leader — used both when a
+// duke declares one directly in Phase 4, and when a Revocation target Defies
+// during Council. Deliberately does NOT touch activePlayers: narrowing it
+// here would immediately kick the King (or anyone else) out of the *current*
+// phase's active set, which is wrong when called from Council (where
+// everyone must stay active to finish the phase). Phase-4 callers narrow via
+// setRebellionStage themselves; a Council-time Defy is resumed at the right
+// stage by warAndRebellion's turn.onBegin once Phase 4 actually begins.
+function startRebellion(G, ctx, leader) {
+  // A war and a rebellion never both enter Phase 4 (the codebase's existing
+  // convention — see the pre-existing pendingWar guard this mirrors). Re-checked
+  // here, not just at the caller, because a Revocation's Submit/Defy response
+  // can land long after proposeRevocation ran its own check (a war can be
+  // declared in the meantime while the vote/response is still outstanding).
+  if (G.pendingWar || G.pendingConquest || G.pendingOccupation) return false;
+  const dukes = rebellionDukeOrder(G, ctx);
+  const leaderIndex = dukes.indexOf(leader);
+  if (leaderIndex < 0) return false;
+  const sideOrder = dukes.slice(leaderIndex + 1).concat(dukes.slice(0, leaderIndex));
+  G.activeRebellion = {
+    leader,
+    sides: {},
+    sideOrder,
+    sideIndex: 0,
+    step: sideOrder.length ? 'sides' : 'locked',
+    renegotiated: {},
+    negotiationIndex: 0,
+  };
+  G.rebellionThisYear = true;
+  resolveSchemes(G, 'rebellionDeclared');
+  G.log.push(`Seat ${leader} raises the banner of rebellion!`);
+  return true;
+}
+
+// Called from game.js's warAndRebellion turn.onBegin to resume a rebellion
+// that was already started during Council (a Revocation Defy, §11) at the
+// correct activePlayers stage — the counterpart to the narrowing declareRebellion
+// applies directly when a duke starts one from inside Phase 4 itself.
+export function resumeRebellionStage(G, events) {
+  if (G.activeRebellion) setRebellionStage(events, rebellionActivePlayers(G));
 }
 
 function rebellionCoalition(G, seat) {
@@ -520,6 +593,9 @@ export const councilMoves = {
   // King declares an external war; resolved in Phase 4.
   declareWar({ G, playerID }, kingdomId) {
     if (!isKing(G, playerID)) return INVALID_MOVE;
+    // A Revocation Defied earlier this Council already committed the year to
+    // a civil war (§11); don't let the King also open an external one.
+    if (G.activeRebellion) return INVALID_MOVE;
     const fk = G.foreignKingdoms.find((k) => k.id === kingdomId && !k.conquered);
     if (!fk) return INVALID_MOVE;
     if (!reserveCouncilProposal(G)) return INVALID_MOVE;
@@ -532,12 +608,64 @@ export const councilMoves = {
     G.log.push(`King declares war on ${fk.name} (garrison ${fk.garrison}).`);
   },
 
+  // §11: Royal Prerogative if the King holds a Casus Belli on the target
+  // (earned or the standing Furious one); otherwise it needs an M5.1 vote.
+  // Either path ends the same way: a pending response the target resolves
+  // via respondRevocation.
+  proposeRevocation({ G, playerID }, dukeSeat) {
+    if (!isKing(G, playerID)) return INVALID_MOVE;
+    if (!(dukeSeat in G.favor)) return INVALID_MOVE;
+    if (G.pendingRevocation || G.pendingVote || G.activeRebellion || G.rebellionThisYear ||
+      G.pendingWar || G.pendingConquest || G.pendingOccupation) return INVALID_MOVE;
+
+    if (hasCasusBelli(G, dukeSeat)) {
+      if (!reserveCouncilProposal(G)) return INVALID_MOVE;
+      G.pendingRevocation = { target: dukeSeat };
+      G.log.push(`King invokes Royal Prerogative to revoke a province from seat ${dukeSeat}.`);
+      return;
+    }
+    return proposeVote({ G, playerID }, { type: 'revocation', dukeSeat });
+  },
+
+  // §11: the target Submits (loses one province of their own choosing, -2
+  // Favor, spends any Casus Belli) or Defies (immediate rebellion, §10).
+  respondRevocation({ G, ctx, playerID }, choice, provinceId) {
+    const pending = G.pendingRevocation;
+    if (!pending || pending.target !== playerID) return INVALID_MOVE;
+
+    if (choice === 'submit') {
+      const province = G.provinces[provinceId];
+      if (!province || province.owner !== playerID) return INVALID_MOVE;
+      G.pendingRevocation = null;
+      province.owner = G.crownHolder;
+      province.faceUp = true;
+      delete province.occupiedBy;
+      clearProvinceClaims(G, provinceId);
+      G.casusBelli[playerID] = 0;
+      adjustFavor(G, playerID, CONFIG.favor.onRevoke, 'submitted to Revocation');
+      G.log.push(`Seat ${playerID} submits to Revocation, ceding ${province.name}.`);
+      return;
+    }
+
+    if (choice === 'defy') {
+      // Validate before mutating: startRebellion may still reject this (e.g. a
+      // war was declared while the Revocation vote/response was outstanding),
+      // and the response window should stay open for a retry if so.
+      if (!startRebellion(G, ctx, playerID)) return INVALID_MOVE;
+      G.pendingRevocation = null;
+      G.log.push(`Seat ${playerID} defies the Revocation and raises rebellion!`);
+      return;
+    }
+
+    return INVALID_MOVE;
+  },
+
   // ADR-0004: cash paid during a vote is the only binding form of bribery.
   transferGold,
 
   endCouncil({ G, playerID, events }) {
     if (!isKing(G, playerID)) return INVALID_MOVE;
-    if (G.pendingVote) return INVALID_MOVE;
+    if (G.pendingVote || G.pendingRevocation) return INVALID_MOVE;
     events.endPhase();
   },
 };
@@ -1039,28 +1167,11 @@ export const warMoves = {
   declareRebellion({ G, ctx, events, playerID }) {
     if (isKing(G, playerID)) return INVALID_MOVE;
     if (G.activeRebellion || G.rebellionThisYear) return INVALID_MOVE;
-    if (G.pendingWar || G.pendingConquest || G.pendingOccupation) return INVALID_MOVE;
-    const dukes = rebellionDukeOrder(G, ctx);
-    const leaderIndex = dukes.indexOf(playerID);
-    if (leaderIndex < 0) return INVALID_MOVE;
-    const sideOrder = dukes.slice(leaderIndex + 1).concat(dukes.slice(0, leaderIndex));
-    G.activeRebellion = {
-      leader: playerID,
-      sides: {},
-      sideOrder,
-      sideIndex: 0,
-      step: sideOrder.length ? 'sides' : 'locked',
-      renegotiated: {},
-      negotiationIndex: 0,
-    };
-    G.rebellionThisYear = true;
-    resolveSchemes(G, 'rebellionDeclared');
-    G.log.push(`Seat ${playerID} raises the banner of rebellion!`);
-    if (sideOrder.length) {
-      setRebellionStage(events, { [sideOrder[0]]: 'rebellionSides' });
-    } else {
-      setRebellionStage(events, { [G.crownHolder]: 'rebellionLocked' });
-    }
+    // startRebellion also re-checks pendingWar/pendingConquest/pendingOccupation.
+    if (!startRebellion(G, ctx, playerID)) return INVALID_MOVE;
+    // Narrow activePlayers immediately — safe here because we're already in
+    // Phase 4, unlike a Council-time Defy (see startRebellion / respondRevocation).
+    setRebellionStage(events, rebellionActivePlayers(G));
   },
 
   // §10: every other duke declares once, clockwise from the rebel.
@@ -1077,15 +1188,8 @@ export const warMoves = {
       rebellion.step = 'negotiation';
       rebellion.negotiationIndex = 0;
       G.log.push('Rebellion negotiation opens; each duke may switch sides once.');
-      setRebellionStage(events, {
-        [rebellion.sideOrder[0]]: 'rebellionNegotiation',
-        [G.crownHolder]: 'rebellionNegotiationKing',
-      });
-    } else {
-      setRebellionStage(events, {
-        [rebellion.sideOrder[rebellion.sideIndex]]: 'rebellionSides',
-      });
     }
+    setRebellionStage(events, rebellionActivePlayers(G));
   },
 
   // §10 / ADR-0004: one renegotiation pass, with cash-now offers handled by
@@ -1104,13 +1208,8 @@ export const warMoves = {
     if (rebellion.negotiationIndex === rebellion.sideOrder.length) {
       rebellion.step = 'locked';
       G.log.push('Rebellion sides locked; the battle may now resolve.');
-      setRebellionStage(events, { [G.crownHolder]: 'rebellionLocked' });
-    } else {
-      setRebellionStage(events, {
-        [rebellion.sideOrder[rebellion.negotiationIndex]]: 'rebellionNegotiation',
-        [G.crownHolder]: 'rebellionNegotiationKing',
-      });
     }
+    setRebellionStage(events, rebellionActivePlayers(G));
   },
 
   // Resolve rebellion. M4.3 will expand the winning branch into full land and

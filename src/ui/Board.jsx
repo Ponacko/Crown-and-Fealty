@@ -196,7 +196,8 @@ function PhaseControls({ phase, moves, G, me, isKing }) {
                 onClick={() => moves.proposeLaw('levyLaw', v)}>{v}</button>)}
           </div>
           {G.pendingVote && <div>
-            <b>Vote: {G.pendingVote.proposal.which || G.pendingVote.proposal.cardId}</b>
+            <b>Vote: {G.pendingVote.proposal.which || G.pendingVote.proposal.cardId ||
+              `Revoke a province from seat ${G.pendingVote.proposal.dukeSeat}`}</b>
             <button style={btn} onClick={() => moves.vote(true)}>YES</button>
             <button style={btn} onClick={() => moves.vote(false)}>NO</button>
           </div>}
@@ -218,6 +219,26 @@ function PhaseControls({ phase, moves, G, me, isKing }) {
                     </button>)))
               : <span> king only</span>}
           </div>
+          <div>Revoke a province (prerogative if the target has a Casus Belli or is Furious, else needs a vote):
+            {isKing
+              ? Object.keys(G.favor).map((duke) => (
+                <button key={duke} style={btn} disabled={G.pendingVote || G.pendingRevocation}
+                  onClick={() => moves.proposeRevocation(duke)}>
+                  Revoke → {duke}
+                </button>))
+              : <span> king only</span>}
+          </div>
+          {G.pendingRevocation && G.pendingRevocation.target === me && <div>
+            <b>Respond to Revocation</b>
+            {Object.values(G.provinces).filter((p) => p.owner === me).map((p) => (
+              <button key={p.id} style={btn}
+                onClick={() => moves.respondRevocation('submit', p.id)}>
+                Submit → cede {p.name}
+              </button>))}
+            <button style={btn} onClick={() => moves.respondRevocation('defy')}>
+              Defy ⚔ (raise rebellion)
+            </button>
+          </div>}
           <div>Declare war:
             {G.foreignKingdoms.filter((k) => !k.conquered).map((k) =>
               <button key={k.id} style={btn} onClick={() => moves.declareWar(k.id)}>
@@ -231,7 +252,7 @@ function PhaseControls({ phase, moves, G, me, isKing }) {
                   {o}→{d}
                 </button>))}
           </div>
-          <button style={btn} disabled={!isKing || G.pendingVote}
+          <button style={btn} disabled={!isKing || G.pendingVote || G.pendingRevocation}
             onClick={() => moves.endCouncil()}>END COUNCIL ▶</button>
         </div>
       );

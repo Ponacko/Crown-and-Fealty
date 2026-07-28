@@ -12,6 +12,7 @@ import {
   actionMoves,
   warMoves,
   harvestMoves,
+  resumeRebellionStage,
 } from './moves.js';
 
 const crownHolderPos = (G, ctx) => ctx.playOrder.indexOf(G.crownHolder);
@@ -96,6 +97,10 @@ export const CrownAndFealty = {
       next: 'harvest',
       turn: {
         activePlayers: { all: 'warCommit' },
+        // §11: a Revocation Defied during Council already set G.activeRebellion
+        // before Phase 4 began; resume it at the right stage instead of leaving
+        // everyone in the default war-commit stage (see moves.js resumeRebellionStage).
+        onBegin: ({ G, events }) => resumeRebellionStage(G, events),
         stages: {
           warCommit: { moves: warMoves },
           rebellionSides: { moves: warMoves },

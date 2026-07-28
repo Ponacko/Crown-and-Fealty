@@ -73,6 +73,14 @@ function assertPhase(expected) {
 
 console.log(`Simulating ${CONFIG.years} years, ${NUM_PLAYERS} seats...`);
 
+// §4: the Crown is auctioned before Year 1. Seat 0 bids the minimum (0
+// prestige debt) and everyone else passes, so it keeps this script's
+// existing "seat 0 is King" assumption while still exercising the real
+// auction phase and its automatic transition into Council.
+assertPhase('auction');
+move(KING, 'bid', 0);
+for (const duke of DUKES) move(duke, 'passAuction');
+
 for (let y = 1; y <= CONFIG.years; y++) {
   assertPhase('council');
   // Only the crown-holder may run council business.

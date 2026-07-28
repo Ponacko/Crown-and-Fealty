@@ -1,6 +1,6 @@
 // M3.1 checks: levy duty, simultaneous dial reveal, external-war strength,
 // duty branding, scheme/character/Marshal bonuses, and casualties.
-import { setup } from '../src/game/setup.js';
+import { setup, crownKing } from '../src/game/setup.js';
 import { CONFIG } from '../src/config.js';
 import { CrownAndFealty } from '../src/game/game.js';
 import { warMoves, levyDuty } from '../src/game/moves.js';
@@ -8,12 +8,14 @@ import { warMoves, levyDuty } from '../src/game/moves.js';
 const INVALID_MOVE = 'INVALID_MOVE';
 const random = { Shuffle: (cards) => cards, Number: () => 0 };
 const context = (G, playerID) => ({ G, playerID, random });
+const ctx = { numPlayers: 4, playOrder: ['0', '1', '2', '3'] };
 
+// §4: this script exercises external-war resolution, not the Crown auction —
+// crown seat 0 directly at the old scaffold's default (no starting debt).
 function makeGame() {
-  return setup({
-    ctx: { numPlayers: 4, playOrder: ['0', '1', '2', '3'] },
-    random,
-  });
+  const G = setup({ ctx, random });
+  crownKing(G, ctx, '0', 0);
+  return G;
 }
 
 function assert(condition, message) {

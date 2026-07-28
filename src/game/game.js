@@ -6,6 +6,8 @@ import { ActivePlayers } from 'boardgame.io/dist/esm/core.js';
 import { CONFIG } from '../config.js';
 import { setup } from './setup.js';
 import {
+  auctionMoves,
+  resolveAuction,
   councilMoves,
   draftMoves,
   dealDraftPacks,
@@ -16,6 +18,34 @@ import {
 } from './moves.js';
 
 const crownHolderPos = (G, ctx) => ctx.playOrder.indexOf(G.crownHolder);
+
+// §4: a seat is "contested" in the Crown auction while it hasn't passed and
+// isn't the current high bidder — the high bidder simply waits until either
+// everyone else has passed (they win) or someone outbids them (making them
+// contested again, so they get a turn to respond).
+const contestedAuctionSeats = (G, ctx) => ctx.playOrder.filter((seat) =>
+  !G.auction.passed[seat] && seat !== G.auction.highBidder);
+
+// A single action (bid or pass) per turn; the next contested seat goes after
+// the current one, wrapping around. Returning undefined — no contested seat
+// left — ends the phase automatically (see the `actions` phase below for the
+// same convention), landing in onEnd to crown the winner.
+const auctionTurn = () => ({
+  order: {
+    first: () => 0,
+    next: ({ G, ctx }) => {
+      const contested = contestedAuctionSeats(G, ctx);
+      if (contested.length === 0) return undefined;
+      const n = ctx.playOrder.length;
+      for (let step = 1; step <= n; step++) {
+        const pos = (ctx.playOrderPos + step) % n;
+        if (contested.includes(ctx.playOrder[pos])) return pos;
+      }
+      return undefined;
+    },
+  },
+  endIf: () => true, // one move ends the turn; see actions phase's endIf for contrast
+});
 
 // §5: the crown-holder is the sole actor in Harvest and always leads off the
 // Actions phase. Council is simultaneous after the King proposes, so every
@@ -44,10 +74,19 @@ export const CrownAndFealty = {
   turn: { activePlayers: ActivePlayers.ALL },
 
   phases: {
+    auction: {
+      // §4: the Crown is auctioned before Year 1 begins — an open-ascending
+      // bid in negative starting Prestige. See auctionTurn/contestedAuctionSeats
+      // above and auctionMoves/resolveAuction in moves.js.
+      start: true,
+      next: 'council',
+      turn: auctionTurn(),
+      onEnd: ({ G, ctx }) => resolveAuction(G, ctx),
+      moves: auctionMoves,
+    },
     council: {
       // §5 Council: the King proposes; every seat may then vote or transfer
       // cash openly. Move-level guards keep proposal/end controls royal.
-      start: true,
       next: 'draft',
       turn: { activePlayers: ActivePlayers.ALL },
       moves: councilMoves,

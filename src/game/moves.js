@@ -13,6 +13,7 @@
 import { INVALID_MOVE } from 'boardgame.io/dist/esm/core.js';
 import { CONFIG } from '../config.js';
 import { CARDS } from './data.js';
+import { crownKing } from './setup.js';
 import {
   provinceCount,
   adjustFavor,
@@ -520,6 +521,49 @@ export function grantProvince(G, provinceId, requestedRecipient, reason = 'grant
     player.claims = player.claims.filter((entry) => entry.provinceId !== provinceId);
   }
   return true;
+}
+
+// ---------------------------------------------------------------------------
+// PRE-GAME — AUCTION THE CROWN (§4: open-ascending bid in negative starting
+// Prestige). game.js's `auction` phase turn order only ever gives a turn to a
+// "contested" seat — not yet passed, and not the current high bidder — so a
+// standing high bidder is skipped until someone outbids them; the phase ends
+// itself (turn.order.next returning undefined) once no contested seat
+// remains, and its onEnd hook calls resolveAuction below.
+// ---------------------------------------------------------------------------
+export const auctionMoves = {
+  bid({ G, playerID }, amount) {
+    if (G.auction.resolved || G.auction.passed[playerID]) return INVALID_MOVE;
+    amount = amount | 0;
+    if (amount < 0 || amount <= G.auction.highBid) return INVALID_MOVE;
+    G.auction.highBid = amount;
+    G.auction.highBidder = playerID;
+    G.log.push(`Seat ${playerID} bids -${amount} prestige for the Crown.`);
+  },
+
+  // A seat that passes is out for the rest of this auction. The seat left
+  // holding the field wins at the standing high bid, so at least one seat
+  // must always remain — the last non-passed bidder can't fold (they must
+  // bid instead, even a free 0, rather than leave the Crown to nobody).
+  passAuction({ G, ctx, playerID }) {
+    if (G.auction.resolved || G.auction.passed[playerID]) return INVALID_MOVE;
+    const othersStillIn = ctx.playOrder.some((seat) =>
+      seat !== playerID && !G.auction.passed[seat]);
+    if (!othersStillIn) return INVALID_MOVE;
+    G.auction.passed[playerID] = true;
+    G.log.push(`Seat ${playerID} passes on the Crown.`);
+  },
+};
+
+// Called from game.js's auction phase onEnd once no contested seat remains:
+// the sole seat left non-passed wins at the standing high bid (0 if nobody
+// ever bid — the guard in passAuction above guarantees a winner still exists).
+export function resolveAuction(G, ctx) {
+  const winner = ctx.playOrder.find((seat) => !G.auction.passed[seat]);
+  const bid = Math.max(0, G.auction.highBid);
+  G.auction.resolved = true;
+  G.auction.winner = winner;
+  crownKing(G, ctx, winner, bid);
 }
 
 // ---------------------------------------------------------------------------

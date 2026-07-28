@@ -3,7 +3,7 @@
 // routes through the M5.1 Council vote. The target then Submits (loses one
 // province of their choice, -2 favor, spends the Casus Belli) or Defies
 // (immediate rebellion, entering the M4 flow).
-import { setup } from '../src/game/setup.js';
+import { setup, crownKing } from '../src/game/setup.js';
 import { CONFIG } from '../src/config.js';
 import { councilMoves, warMoves } from '../src/game/moves.js';
 import { CrownAndFealty } from '../src/game/game.js';
@@ -11,12 +11,14 @@ import { createRequire } from 'node:module';
 
 const INVALID_MOVE = 'INVALID_MOVE';
 const random = { Shuffle: (cards) => cards, Number: () => 0 };
+const ctx = { numPlayers: 4, playOrder: ['0', '1', '2', '3'] };
 
+// §4: this script exercises Revocation directly, not the Crown auction —
+// crown seat 0 directly at the old scaffold's default (no starting debt).
 function makeGame() {
-  return setup({
-    ctx: { numPlayers: 4, playOrder: ['0', '1', '2', '3'] },
-    random,
-  });
+  const G = setup({ ctx, random });
+  crownKing(G, ctx, '0', 0);
+  return G;
 }
 
 function context(G, playerID) {
@@ -164,6 +166,12 @@ function frameworkMove(playerID, type, ...args) {
   const error = dispatch(playerID, type, ...args);
   assert(!error, `framework rejected ${type}: ${JSON.stringify(error)}`);
 }
+
+// §4: resolve the pre-game Crown auction first — seat 0 bids the minimum and
+// everyone else passes, keeping this script's "seat 0 is King" assumption.
+frameworkMove('0', 'bid', 0);
+for (const seat of ['1', '2', '3']) frameworkMove(seat, 'passAuction');
+assert(state.ctx.phase === 'council', 'the Crown auction did not advance into Council');
 
 frameworkMove('0', 'proposeRevocation', '1');
 assert(state.G.pendingRevocation === null, 'prerogative check should have relied on real CB/favor state');

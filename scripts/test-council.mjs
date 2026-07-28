@@ -1,6 +1,6 @@
 // M5.1 checks: council proposals resolve through weighted votes, bribery is
 // immediate cash transfer, and the old direct law setter is gone.
-import { setup } from '../src/game/setup.js';
+import { setup, crownKing } from '../src/game/setup.js';
 import { CONFIG } from '../src/config.js';
 import { CrownAndFealty } from '../src/game/game.js';
 import { councilMoves } from '../src/game/moves.js';
@@ -9,12 +9,14 @@ import { createRequire } from 'node:module';
 const INVALID_MOVE = 'INVALID_MOVE';
 const random = { Shuffle: (cards) => cards };
 const context = (G, playerID) => ({ G, playerID });
+const ctx = { numPlayers: 4, playOrder: ['0', '1', '2', '3'] };
 
+// §4: this script exercises Council moves directly, not the Crown auction —
+// crown seat 0 directly at the old scaffold's default (no starting debt).
 function makeGame() {
-  return setup({
-    ctx: { numPlayers: 4, playOrder: ['0', '1', '2', '3'] },
-    random,
-  });
+  const G = setup({ ctx, random });
+  crownKing(G, ctx, '0', 0);
+  return G;
 }
 
 function assert(condition, message) {
@@ -94,6 +96,15 @@ const dispatch = (playerID, type, ...args) => {
   state = { ...state, transients: undefined };
   return error;
 };
+// §4: the game now opens on a Crown auction. Seat 0 bids the minimum and
+// everyone else passes, keeping this script's "seat 0 is King" assumption
+// while still exercising the real auction phase's transition into Council.
+assert(!dispatch('0', 'bid', 0), 'seat 0 could not open the Crown auction');
+for (const seat of ['1', '2', '3']) {
+  assert(!dispatch(seat, 'passAuction'), `seat ${seat} could not pass on the Crown`);
+}
+assert(state.ctx.phase === 'council', 'the Crown auction did not advance into Council');
+
 assert(Object.keys(state.ctx.activePlayers).length === 4,
   'Council did not activate every seat');
 assert(dispatch('1', 'proposeLaw', 'taxLaw', 'high'),

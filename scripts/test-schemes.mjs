@@ -1,18 +1,20 @@
 // M2c checks: schemes are hidden while held, then resolve once at their
 // battle trigger. Non-scheme cards may be bluffs and are discarded as duds.
-import { setup } from '../src/game/setup.js';
+import { setup, crownKing } from '../src/game/setup.js';
 import { CONFIG } from '../src/config.js';
 import { actionMoves, warMoves } from '../src/game/moves.js';
 
 const INVALID_MOVE = 'INVALID_MOVE';
 const random = { Shuffle: (cards) => cards, Number: () => 0 };
 const context = (G, playerID) => ({ G, playerID });
+const ctx = { numPlayers: 4, playOrder: ['0', '1', '2', '3'] };
 
+// §4: this script exercises Scheme resolution, not the Crown auction — crown
+// seat 0 directly at the old scaffold's default (no starting Prestige debt).
 function makeGame() {
-  return setup({
-    ctx: { numPlayers: 4, playOrder: ['0', '1', '2', '3'] },
-    random,
-  });
+  const G = setup({ ctx, random });
+  crownKing(G, ctx, '0', 0);
+  return G;
 }
 
 function assert(condition, message) {

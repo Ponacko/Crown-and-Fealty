@@ -1,43 +1,26 @@
 // ==========================================================================
-// SETUP — builds the initial G state from CONFIG + data.
-// TODO(auction): the doc makes the crown an auction (negative starting
-// prestige). For the scaffold, seat "0" is simply the king and everyone
-// starts at 0 prestige. Wire the auction as a pre-game phase later.
+// SETUP — builds the initial G state from CONFIG + data. §4: the Crown is
+// auctioned in a pre-game phase (see the `auction` phase in game.js and
+// `auctionMoves` in moves.js) before Year 1 begins, so `setup()` itself
+// leaves the Crown, Crownlands, duchies, and every seat's starting gold/
+// troops/prestige unassigned (nobody is King yet). `crownKing()` below is
+// the seam that assigns all of that, called once the auction resolves.
 // ==========================================================================
-import { CONFIG, KING_SEAT } from '../config.js';
+import { CONFIG } from '../config.js';
 import { PROVINCES, DUCHY_ORDER, FOREIGN_KINGDOMS, CARDS } from './data.js';
 
 export function setup({ ctx, random }) {
-  const n = ctx.numPlayers;
-  const dukes = ctx.playOrder.filter((p) => p !== KING_SEAT);
-
-  // Map duke seats -> duchy regions; leftover duchies become minor/neutral.
-  const dukeOfRegion = {};
-  dukes.forEach((seat, i) => {
-    if (DUCHY_ORDER[i]) dukeOfRegion[DUCHY_ORDER[i]] = seat;
-  });
-
-  // Build the province table with ownership assigned.
   const provinces = {};
   for (const p of PROVINCES) {
-    let owner = null;
-    if (p.region === 'crown') owner = KING_SEAT;
-    else if (dukeOfRegion[p.region]) owner = dukeOfRegion[p.region];
-    else owner = null; // unclaimed duchy or minor -> neutral
-    provinces[p.id] = { ...p, owner, building: null, faceUp: true };
+    provinces[p.id] = { ...p, owner: null, building: null, faceUp: true };
   }
 
-  // Players
   const players = {};
   for (const seat of ctx.playOrder) {
-    const isKing = seat === KING_SEAT;
-    const totalLevy = Object.values(provinces)
-      .filter((pr) => pr.owner === seat)
-      .reduce((s, pr) => s + pr.levy, 0);
     players[seat] = {
-      isKing,
-      gold: isKing ? CONFIG.startGold.king : CONFIG.startGold.duke,
-      troops: Math.ceil(totalLevy / 2), // standing armies start small
+      isKing: false,
+      gold: 0,
+      troops: 0,
       prestige: 0,
       hand: [],
       schemes: [],       // face-down cards {cardId}
@@ -50,21 +33,17 @@ export function setup({ ctx, random }) {
     };
   }
 
-  // Favor: one track per duke, relationship with the current king.
-  const favor = {};
-  for (const seat of dukes) favor[seat] = 0;
-
-  return {
+  const G = {
     year: 1,
-    crownHolder: KING_SEAT,
+    crownHolder: null,
     provinces,
     players,
-    favor,
+    favor: {},
     taxLaw: CONFIG.startingTaxLaw,
     levyLaw: CONFIG.startingLevyLaw,
     // Offices: marshal held by king by default; civilian offices unseated.
     offices: {
-      marshal: KING_SEAT,
+      marshal: null,
       steward: null,
       chancellor: null,
       spymaster: null,
@@ -95,8 +74,59 @@ export function setup({ ctx, random }) {
     draftPacks: null,
     draftRound: 0,
     draftPicksThisRound: {},
-    log: [`Year 1 begins. Seat ${KING_SEAT} wears the crown.`],
+    // §4: open-ascending auction for the Crown, resolved by the `auction`
+    // phase (game.js) via auctionMoves.bid/passAuction (moves.js). highBid
+    // starts below any legal bid (0 is a valid opening bid) so the phase can
+    // tell "nobody has bid yet" apart from "the crown goes for free".
+    auction: { highBid: -1, highBidder: null, passed: {}, resolved: false },
+    log: ['The Crown is put up for auction.'],
   };
+
+  return G;
+}
+
+// §4: assigns the Crown, Crownlands, duchies, and starting gold/troops/
+// prestige to `kingSeat`, who won the auction at a starting Prestige debt of
+// `bid`. Called from moves.js's resolveAuction() once the `auction` phase
+// (game.js) concludes. Move-level unit tests that call `setup()` directly
+// and skip the auction phase call this themselves for a default seat-0-King
+// state (see scripts/*.mjs's makeGame() helpers).
+export function crownKing(G, ctx, kingSeat, bid) {
+  const dukes = ctx.playOrder.filter((seat) => seat !== kingSeat);
+
+  // Map duke seats -> duchy regions; leftover duchies become minor/neutral.
+  const dukeOfRegion = {};
+  dukes.forEach((seat, i) => {
+    if (DUCHY_ORDER[i]) dukeOfRegion[DUCHY_ORDER[i]] = seat;
+  });
+
+  for (const province of Object.values(G.provinces)) {
+    if (province.region === 'crown') province.owner = kingSeat;
+    else if (dukeOfRegion[province.region]) province.owner = dukeOfRegion[province.region];
+    else province.owner = null; // unclaimed duchy or minor -> neutral
+  }
+
+  for (const seat of ctx.playOrder) {
+    const isKing = seat === kingSeat;
+    const totalLevy = Object.values(G.provinces)
+      .filter((pr) => pr.owner === seat)
+      .reduce((s, pr) => s + pr.levy, 0);
+    const player = G.players[seat];
+    player.isKing = isKing;
+    player.gold = isKing ? CONFIG.startGold.king : CONFIG.startGold.duke;
+    player.troops = Math.ceil(totalLevy / 2); // standing armies start small
+    player.prestige = isKing ? -bid : 0;
+  }
+
+  // Favor: one track per duke, relationship with the current king.
+  G.favor = {};
+  for (const seat of dukes) G.favor[seat] = 0;
+
+  G.crownHolder = kingSeat;
+  G.offices.marshal = kingSeat;
+  G.log.push(bid > 0
+    ? `Seat ${kingSeat} wins the auction and wears the Crown at -${bid} prestige.`
+    : `Seat ${kingSeat} wears the Crown.`);
 }
 
 // Repeat the balanced card list four times to make a shared deck large enough

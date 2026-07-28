@@ -137,7 +137,3 @@ export const CONFIG = {
   marshalBattleBonus: 2,
   chancellorVoteWeight: 2,
 };
-
-// Convenience: king is always seat "0" in this scaffold.
-// (Auctioning the crown is a setup TODO — see setup.js.)
-export const KING_SEAT = '0';

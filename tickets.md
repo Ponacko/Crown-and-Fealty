@@ -187,10 +187,10 @@ setup — so it can be picked up any time after M0.
 
 **Blocked by:** M0
 
-- [ ] A pre-game phase where players bid in negative starting prestige
-- [ ] Highest bidder becomes King and starts at −(bid) prestige
-- [ ] Remaining seats are assigned duchies
-- [ ] The king is determined by auction; starting prestige reflects the winning bid; rest of setup (duchies, gold, troops) still holds
+- [x] A pre-game phase where players bid in negative starting prestige
+- [x] Highest bidder becomes King and starts at −(bid) prestige
+- [x] Remaining seats are assigned duchies
+- [x] The king is determined by auction; starting prestige reflects the winning bid; rest of setup (duchies, gold, troops) still holds
 
 ## M7 — Hidden information
 

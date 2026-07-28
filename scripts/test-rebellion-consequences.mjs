@@ -1,17 +1,18 @@
 // M4.3 checks: both rebellion branches apply land, prestige, Favor, neutral,
 // cooldown, crown, and troop consequences.
-import { setup } from '../src/game/setup.js';
+import { setup, crownKing } from '../src/game/setup.js';
 import { warMoves } from '../src/game/moves.js';
 import { adjustFavor, runHarvest } from '../src/game/scoring.js';
 import { CONFIG } from '../src/config.js';
 
 const random = { Shuffle: (cards) => cards, Number: () => 0 };
+const ctx = { numPlayers: 4, playOrder: ['0', '1', '2', '3'] };
 
+// §4: this script exercises rebellion consequences, not the Crown auction —
+// crown seat 0 directly at the old scaffold's default (no starting debt).
 function makeGame(sides) {
-  const G = setup({
-    ctx: { numPlayers: 4, playOrder: ['0', '1', '2', '3'] },
-    random,
-  });
+  const G = setup({ ctx, random });
+  crownKing(G, ctx, '0', 0);
   G.activeRebellion = { leader: '1', sides, step: 'locked' };
   return G;
 }

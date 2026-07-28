@@ -1,6 +1,6 @@
 // M2b checks: Action, Character, and Claim cards are real moves, while
 // crown-only cards remain safely in a duke's hand when rejected.
-import { setup } from '../src/game/setup.js';
+import { setup, crownKing } from '../src/game/setup.js';
 import { CARDS } from '../src/game/data.js';
 import { CONFIG } from '../src/config.js';
 import { runHarvest } from '../src/game/scoring.js';
@@ -15,12 +15,14 @@ import {
 const INVALID_MOVE = 'INVALID_MOVE';
 const random = { Shuffle: (cards) => cards };
 const context = (G, playerID) => ({ G, playerID });
+const ctx = { numPlayers: 4, playOrder: ['0', '1', '2', '3'] };
 
+// §4: this script exercises card effects, not the Crown auction — crown
+// seat 0 directly at the old scaffold's default (no starting Prestige debt).
 function makeGame() {
-  return setup({
-    ctx: { numPlayers: 4, playOrder: ['0', '1', '2', '3'] },
-    random,
-  });
+  const G = setup({ ctx, random });
+  crownKing(G, ctx, '0', 0);
+  return G;
 }
 
 function addCard(G, seat, cardId, uid = `${cardId}_test`) {

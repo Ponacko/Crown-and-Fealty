@@ -4,7 +4,7 @@
 // (unchallenged king, one office granted to duke 1). Guards against silent
 // regressions to setup.js/scoring.js/config.js.
 // ==========================================================================
-import { setup } from '../src/game/setup.js';
+import { setup, crownKing } from '../src/game/setup.js';
 import { runHarvest, finalScores } from '../src/game/scoring.js';
 
 function assertInRange(label, value, min, max) {
@@ -19,7 +19,11 @@ function assertInRange(label, value, min, max) {
 // boardgame.io's plugin injection, so it needs a stub — deck order is
 // irrelevant to the scoring math this test checks, so identity is fine.
 const random = { Shuffle: (arr) => arr };
-const G = setup({ ctx: { numPlayers: 4, playOrder: ['0', '1', '2', '3'] }, random });
+const ctx = { numPlayers: 4, playOrder: ['0', '1', '2', '3'] };
+const G = setup({ ctx, random });
+// §4: this script exercises the harvest/scoring spine, not the Crown auction
+// — crown seat 0 directly at the old scaffold's default (no starting debt).
+crownKing(G, ctx, '0', 0);
 G.offices.steward = '1';
 
 for (let y = 1; y <= 6; y++) {

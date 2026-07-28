@@ -26,7 +26,9 @@ function isActiveSeat(ctx, seat) {
 }
 
 export function Board({ G, ctx, moves, playerID }) {
-  const me = playerID ?? G.crownHolder;
+  // No seat picked in the debug panel: fall back to whoever's turn it is
+  // (during the pre-game auction, G.crownHolder isn't decided yet).
+  const me = playerID ?? ctx.currentPlayer;
   const isKing = me === G.crownHolder;
   const phase = ctx.phase;
   const active = isActiveSeat(ctx, me);
@@ -48,7 +50,7 @@ export function Board({ G, ctx, moves, playerID }) {
         <b>Year {G.year} / {CONFIG.years}</b> — phase: <b>{phase}</b>
         <div>Acting as seat: <b>{me}</b> {isKing ? '(KING 👑)' : '(duke)'}</div>
         <div>Active now: <b>{ctx.activePlayers ? Object.keys(ctx.activePlayers).join(', ') : ctx.currentPlayer}</b></div>
-        <div>Crown holder: seat {G.crownHolder}</div>
+        <div>Crown holder: {G.crownHolder != null ? `seat ${G.crownHolder}` : 'TBD — auction underway'}</div>
         <div>Tax law: {G.taxLaw} | Levy law: {G.levyLaw}</div>
         <div>Offices: {JSON.stringify(G.offices)}</div>
         <div>Pending war: {G.pendingWar ? G.pendingWar.kingdomId : '—'}</div>
@@ -64,7 +66,7 @@ export function Board({ G, ctx, moves, playerID }) {
           <div key={seat} style={{ borderTop: '1px dotted #ccc', marginTop: 4, paddingTop: 4 }}>
             seat {seat}{seat === G.crownHolder ? ' 👑' : ''}: {p.prestige} prestige
             <div>gold {p.gold} | troops {p.troops} | actionsLeft {p.actionsLeft}</div>
-            <div>favor: {seat in G.favor ? G.favor[seat] : 'n/a (king)'}</div>
+            <div>favor: {seat in G.favor ? G.favor[seat] : 'n/a'}</div>
             <div>hand:
               {p.hand.length === 0 && ' —'}
               {p.hand.map((h) => (
@@ -182,6 +184,24 @@ function PhaseControls({ phase, moves, G, me, isKing }) {
   );
 
   switch (phase) {
+    case 'auction': {
+      const passedSeats = Object.keys(G.auction.passed).filter((s) => G.auction.passed[s]);
+      return (
+        <div>
+          <div>High bid: <b>
+            {G.auction.highBidder == null
+              ? 'none yet'
+              : `-${G.auction.highBid} prestige (seat ${G.auction.highBidder})`}
+          </b></div>
+          <div>Passed: {passedSeats.length ? passedSeats.join(', ') : '—'}</div>
+          <div>{num}
+            <button style={btn} onClick={() => moves.bid(n)}>Bid -{n} prestige</button>
+            <button style={btn} onClick={() => moves.passAuction()}>PASS</button>
+          </div>
+        </div>
+      );
+    }
+
     case 'council':
       return (
         <div>

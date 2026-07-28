@@ -1,18 +1,20 @@
 // M2d checks: decree cards may be held by any seat, but only the King can
 // enact them through a resolved Council vote; each decree changes the rules.
-import { setup } from '../src/game/setup.js';
+import { setup, crownKing } from '../src/game/setup.js';
 import { CONFIG } from '../src/config.js';
 import { councilMoves, kingDomainLimit, warMoves } from '../src/game/moves.js';
 
 const INVALID_MOVE = 'INVALID_MOVE';
 const random = { Shuffle: (cards) => cards };
 const context = (G, playerID) => ({ G, playerID });
+const ctx = { numPlayers: 4, playOrder: ['0', '1', '2', '3'] };
 
+// §4: this script exercises decree enactment, not the Crown auction — crown
+// seat 0 directly at the old scaffold's default (no starting Prestige debt).
 function makeGame() {
-  return setup({
-    ctx: { numPlayers: 4, playOrder: ['0', '1', '2', '3'] },
-    random,
-  });
+  const G = setup({ ctx, random });
+  crownKing(G, ctx, '0', 0);
+  return G;
 }
 
 function assert(condition, message) {

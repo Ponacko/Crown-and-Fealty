@@ -1,16 +1,17 @@
 // M4.2 checks: civil-war strength uses all troops, coalition-owned castles,
 // the Marshal's side, revealed Schemes, and defender-favoring ties.
-import { setup } from '../src/game/setup.js';
+import { setup, crownKing } from '../src/game/setup.js';
 import { warMoves } from '../src/game/moves.js';
 import { CONFIG } from '../src/config.js';
 
 const random = { Shuffle: (cards) => cards, Number: () => 0 };
+const ctx = { numPlayers: 4, playOrder: ['0', '1', '2', '3'] };
 
 function makeGame() {
-  const G = setup({
-    ctx: { numPlayers: 4, playOrder: ['0', '1', '2', '3'] },
-    random,
-  });
+  const G = setup({ ctx, random });
+  // §4: this script exercises battle math, not the Crown auction — crown
+  // seat 0 directly at the old scaffold's default (no starting Prestige debt).
+  crownKing(G, ctx, '0', 0);
   G.activeRebellion = {
     leader: '1',
     sides: { '2': 'loyal', '3': 'neutral' },

@@ -201,11 +201,11 @@ gameplay milestones.
 
 **Blocked by:** M2b, M2c, M2d, M3.1, M4.1, M6
 
-- [ ] Other players' hands redacted
-- [ ] Gold redacted where the design calls for hidden treasuries (if any)
-- [ ] Face-down schemes redacted before reveal
-- [ ] Secret war dials redacted before reveal
-- [ ] A client for seat N cannot see seat M's hidden fields in the state it receives
+- [x] Other players' hands redacted
+- [x] Gold redacted where the design calls for hidden treasuries (if any)
+- [x] Face-down schemes redacted before reveal
+- [x] Secret war dials redacted before reveal
+- [x] A client for seat N cannot see seat M's hidden fields in the state it receives
 
 ## M8 — UI legibility pass
 
@@ -215,9 +215,9 @@ action surface from every prior ticket.
 
 **Blocked by:** M1, M2a, M2b, M2c, M2d, M3.1, M3.2, M4.1, M4.2, M4.3, M5.1, M5.2, M6, M7
 
-- [ ] Clear phase/turn banner
-- [ ] Whose turn it is, shown plainly
-- [ ] Only available actions are shown/enabled
-- [ ] Favor/prestige visible at a glance
-- [ ] A readable log
-- [ ] A new player can tell whose turn it is, what they can do, and the current scores without reading the code
+- [x] Clear phase/turn banner
+- [x] Whose turn it is, shown plainly
+- [x] Only available actions are shown/enabled
+- [x] Favor/prestige visible at a glance
+- [x] A readable log
+- [x] A new player can tell whose turn it is, what they can do, and the current scores without reading the code

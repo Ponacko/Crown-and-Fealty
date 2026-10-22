@@ -44,7 +44,8 @@ rules code.
 - `moves.js` (cards) → Schemes resolve in M2c; Decrees enact via the Council
   vote in M2d; the Action, Character, and Claim cards from M2b are wired
   through `playCard`.
-- `game.js` → **`playerView`** to redact hidden info for networked play.
+- `game.js` → network-safe `playerView` redacts other seats' hands, gold,
+  face-down schemes, draft packs, the undealt deck, and unrevealed war dials.
 
 ## Codebase map
 
@@ -73,7 +74,8 @@ once that core loop feels right.
 
 ## Networked / multi-device play (later)
 
-boardgame.io ships a server for real multiplayer with hidden info. Once the loop
-is fun, add it and implement `playerView` to hide other players' hands, gold, and
-face-down schemes. Until then, hotseat on one screen is the fastest iteration.
+boardgame.io ships a server for real multiplayer with hidden info. The game
+state now has a network-safe `playerView`; wiring a server and multi-device
+client can wait until the loop is fun. Until then, hotseat on one screen is
+the fastest iteration.
 ```

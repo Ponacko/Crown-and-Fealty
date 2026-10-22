@@ -61,6 +61,46 @@ const crownHolderOnly = () => ({
   },
 });
 
+// The server keeps one complete G, but a multiplayer client must only receive
+// the private information belonging to its seat. Keep the public player shape
+// intact so consumers can render every seat, replacing secret values with
+// neutral values rather than deleting fields that moves/UI code expect.
+function redactPlayer(player, seat, playerID, warRevealed) {
+  const isViewer = seat === playerID;
+  return {
+    ...player,
+    hand: isViewer ? player.hand.map((card) => ({ ...card })) : [],
+    gold: isViewer ? player.gold : null,
+    schemes: isViewer ? player.schemes.map((scheme) => ({ ...scheme })) : [],
+    committed: isViewer || warRevealed ? player.committed : null,
+  };
+}
+
+function redactDraftPacks(draftPacks, playerID) {
+  if (!draftPacks) return draftPacks;
+  const ownPack = draftPacks[playerID];
+  return ownPack
+    ? { [playerID]: ownPack.map((card) => ({ ...card })) }
+    : {};
+}
+
+function redactPendingWar(pendingWar, playerID, playerSeats) {
+  if (!pendingWar) return pendingWar;
+  const commits = pendingWar.revealed
+    ? { ...pendingWar.commits }
+    : Object.prototype.hasOwnProperty.call(pendingWar.commits, playerID)
+      ? { [playerID]: pendingWar.commits[playerID] }
+      : {};
+  const availableTroops = Object.prototype.hasOwnProperty.call(
+    pendingWar.availableTroops || {}, playerID
+  ) ? { [playerID]: pendingWar.availableTroops[playerID] } : {};
+  // Whether every seat has supplied a dial is public information: the King
+  // needs it to reveal, while the counts themselves remain secret until then.
+  const allCommitted = playerSeats.every((seat) =>
+    Object.prototype.hasOwnProperty.call(pendingWar.commits, seat));
+  return { ...pendingWar, commits, availableTroops, allCommitted };
+}
+
 export const CrownAndFealty = {
   name: 'crown-and-fealty',
 
@@ -170,28 +210,22 @@ export const CrownAndFealty = {
     }
   },
 
-  // Multiplayer hidden info. M3.1's war dials are private until reveal;
-  // M7 will extend this redaction to hands, treasuries, and face-down schemes.
+  // Multiplayer hidden info. Hands, treasuries, face-down schemes, draft
+  // packs, and the undealt deck stay private to the relevant client. War dials
+  // are private until the King reveals them together.
   playerView: ({ G, playerID }) => {
-    if (playerID == null || !G.pendingWar || G.pendingWar.revealed) return G;
-    const visibleCommits = Object.prototype.hasOwnProperty.call(
-      G.pendingWar.commits, playerID
-    ) ? { [playerID]: G.pendingWar.commits[playerID] } : {};
-    const visibleAvailable = Object.prototype.hasOwnProperty.call(
-      G.pendingWar.availableTroops || {}, playerID
-    ) ? { [playerID]: G.pendingWar.availableTroops[playerID] } : {};
+    if (playerID == null || !(playerID in G.players)) return G;
+    const warRevealed = Boolean(G.pendingWar?.revealed);
     const players = Object.fromEntries(Object.entries(G.players).map(([seat, player]) => [
       seat,
-      seat === playerID ? player : { ...player, committed: null },
+      redactPlayer(player, seat, playerID, warRevealed),
     ]));
     return {
       ...G,
       players,
-      pendingWar: {
-        ...G.pendingWar,
-        commits: visibleCommits,
-        availableTroops: visibleAvailable,
-      },
+      deck: [],
+      draftPacks: redactDraftPacks(G.draftPacks, playerID),
+      pendingWar: redactPendingWar(G.pendingWar, playerID, Object.keys(G.players)),
     };
   },
 };
